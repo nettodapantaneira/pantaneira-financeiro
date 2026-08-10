@@ -12,12 +12,12 @@
     {
       "binding": "DB",
       "database_name": "pantaneira-financeiro-db",
-      "database_id": "2ee0a624-9a37-4f55-be84-ab146ae9dae4"
+      "database_id": "2ee0a624-9a37-4f55-be84-ab146ae9dae4",
       "migrations_dir": "migrations"
     }
   ],
   "vars": {
     "APP_NAME": "Pantaneira Financeiro",
-    "APP_VERSION": "1.0.1"
+    "APP_VERSION": "1.0.1.1"
   }
 }

@@ -1,4 +1,4 @@
-# Pantaneira Financeiro v1.0.1
+# Pantaneira Financeiro v1.0.1.1
 
 MVP financeiro independente para controle diário da Pantaneira.
 
