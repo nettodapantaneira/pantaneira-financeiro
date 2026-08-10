@@ -83,7 +83,7 @@ export default {
         const nature = String(body.nature || "business_operating");
         if (!["business_operating","inventory","business_debt","personal_withdrawal"].includes(nature)) return json({ error: "Natureza inválida." }, 400);
         const scope = nature === "personal_withdrawal" ? "personal" : (body.scope === "personal" ? "personal" : "business");
-        const target = toPositiveInteger(body.monthly_target_cents, "monthly_target_cents");
+        const target = toNonNegativeInteger(body.monthly_target_cents, "monthly_target_cents");
         const dueDay = optionalDueDay(body.due_day);
         let categoryId = body.category_id == null ? null : toInteger(body.category_id, "category_id");
         if (!categoryId) {
@@ -105,7 +105,7 @@ export default {
         if (!current) return json({ error: "Compromisso não encontrado." }, 404);
         const updated = {
           name: body.name == null ? current.name : String(body.name).trim(),
-          monthly_target_cents: body.monthly_target_cents == null ? current.monthly_target_cents : toPositiveInteger(body.monthly_target_cents,"monthly_target_cents"),
+          monthly_target_cents: body.monthly_target_cents == null ? current.monthly_target_cents : toNonNegativeInteger(body.monthly_target_cents,"monthly_target_cents"),
           due_day: body.due_day === undefined ? current.due_day : optionalDueDay(body.due_day),
           flexible: body.flexible === undefined ? current.flexible : (body.flexible?1:0),
           priority: body.priority == null ? current.priority : toInteger(body.priority,"priority"),
@@ -317,10 +317,16 @@ async function buildDashboard(db) {
 
   let totalBalance = 0;
   let businessBalance = 0;
+  let businessTotalBalance = 0;
+  let pendingBusinessBalance = 0;
   let cashBalance = 0;
   for (const account of accounts) {
     totalBalance += account.balance_cents;
-    if (account.owner_scope === "business") businessBalance += account.balance_cents;
+    if (account.owner_scope === "business") {
+      businessTotalBalance += account.balance_cents;
+      if (Number(account.available_for_spending ?? 1) === 1) businessBalance += account.balance_cents;
+      else pendingBusinessBalance += account.balance_cents;
+    }
     if (account.account_type === "cash" && account.owner_scope === "business") cashBalance += account.balance_cents;
   }
 
@@ -356,6 +362,8 @@ async function buildDashboard(db) {
     balances: {
       all_cents: totalBalance,
       business_cents: businessBalance,
+      business_total_cents: businessTotalBalance,
+      pending_business_cents: pendingBusinessBalance,
       cash_cents: cashBalance,
       committed_strict_cents: strictCommitted,
       committed_flexible_cents: flexibleCommitted,
@@ -379,7 +387,7 @@ async function buildDashboard(db) {
 
 async function listAccountsWithBalances(db) {
   const { results } = await db.prepare(
-    `SELECT a.id,a.name,a.owner_scope,a.account_type,a.opening_balance_cents,a.active,a.notes,
+    `SELECT a.id,a.name,a.owner_scope,a.account_type,a.opening_balance_cents,a.available_for_spending,a.active,a.notes,
       a.opening_balance_cents
       + COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.destination_account_id=a.id AND t.status!='void'),0)
       - COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.source_account_id=a.id AND t.status!='void'),0)
@@ -391,7 +399,7 @@ async function listAccountsWithBalances(db) {
 
 async function accountBalance(db, accountId) {
   return db.prepare(
-    `SELECT a.id,a.name,a.owner_scope,a.account_type,a.opening_balance_cents,
+    `SELECT a.id,a.name,a.owner_scope,a.account_type,a.opening_balance_cents,a.available_for_spending,
       a.opening_balance_cents
       + COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.destination_account_id=a.id AND t.status!='void'),0)
       - COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.source_account_id=a.id AND t.status!='void'),0)
@@ -649,6 +657,11 @@ function toInteger(value, field) {
 function toPositiveInteger(value, field) {
   const n = toInteger(value, field);
   if (n <= 0) throw new Error(`${field} deve ser maior que zero.`);
+  return n;
+}
+function toNonNegativeInteger(value, field) {
+  const n = toInteger(value, field);
+  if (n < 0) throw new Error(`${field} não pode ser negativo.`);
   return n;
 }
 async function readJson(request) {

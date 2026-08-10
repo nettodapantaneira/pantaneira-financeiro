@@ -1,4 +1,4 @@
-# Pantaneira Financeiro v1.0.1.1
+# Pantaneira Financeiro v1.0.2
 
 MVP financeiro independente para controle diário da Pantaneira.
 
@@ -6,13 +6,17 @@ MVP financeiro independente para controle diário da Pantaneira.
 - PWA mobile-first.
 - Login protegido por `APP_PASSWORD` + cookie assinado com `SESSION_SECRET`.
 - Cloudflare Worker + D1.
-- Tela Hoje: saldo empresarial, comprometido, livre de verdade e proteção diária.
+- Tela Hoje: disponível imediato, valores a compensar, patrimônio empresarial, comprometido, livre de verdade e proteção diária.
 - Contas/obrigações e reservas virtuais.
 - Dívidas.
 - Lançamentos com natureza + origem do dinheiro.
 - Retirada pessoal separada da operação da empresa.
 - Caixa em dinheiro com conferência e diferença não identificada.
 - Carga inicial com os valores informados até 10/08/2026.
+- Contas iniciais: Mercado Pago R$ 1.667,81; Nubank R$ 561,01; dinheiro físico R$ 184,00; cheque em mãos R$ 490,02 (fora do PODE USAR até compensar).
+- Energia loja cadastrada com padrão R$ 0,00 por uso de energia solar.
+- R$ 1.000,00 de funcionários já pagos em agosto registrados como histórico de implantação, sem descontar novamente dos saldos atuais.
+- Sem orçamento automático de compras/estoque: compras entram apenas quando realmente acontecerem.
 
 ## Implantação
 
@@ -26,7 +30,7 @@ MVP financeiro independente para controle diário da Pantaneira.
    - `npx wrangler secret put SESSION_SECRET`
 7. Publique: `npm run deploy`.
 8. No Cloudflare, associe o domínio `financeiro.pantaneiraterere.com.br` ao Worker.
-9. No primeiro acesso, vá em **Caixa > Saldos iniciais** e informe o saldo real da conta da Pantaneira e do dinheiro físico.
+9. Os saldos iniciais reais de 10/08/2026 são aplicados automaticamente pela migration `0002_saldos_reais_e_regras.sql`. Depois, ajuste manualmente apenas quando necessário.
 
 ## Desenvolvimento local
 - Copie `.dev.vars.example` para `.dev.vars` e altere os valores.

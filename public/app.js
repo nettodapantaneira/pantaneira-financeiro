@@ -66,6 +66,8 @@ function renderAll(){
   $('freeMoney').textContent=money(d.balances.free_strict_cents);
   $('freeMoney').classList.toggle('negative',d.balances.free_strict_cents<0);
   $('businessBalance').textContent=money(d.balances.business_cents);
+  $('pendingBalance').textContent=money(d.balances.pending_business_cents);
+  $('businessTotal').textContent=money(d.balances.business_total_cents);
   $('committed').textContent=money(d.balances.committed_strict_cents);
   $('protectTotal').textContent=money(d.daily_protection.total_cents);
   $('protectBusiness').textContent=money(d.daily_protection.business_cents);
@@ -113,7 +115,11 @@ function renderTransactions(){
 }
 
 function renderAccounts(){
-  $('accountsSetup').innerHTML=state.accounts.map(a=>`<article class="list-card"><div class="row"><div><h3>${esc(a.name)}</h3><p>${a.account_type==='cash'?'Dinheiro físico':a.owner_scope==='business'?'Empresa':'Pessoal'}</p></div><div class="money">${money(a.balance_cents)}</div></div><div class="row" style="margin-top:12px"><span class="muted small">Saldo inicial: ${money(a.opening_balance_cents)}</span><button class="mini-btn" data-opening="${a.id}">Definir saldo inicial</button></div></article>`).join('');
+  $('accountsSetup').innerHTML=state.accounts.map(a=>{
+    const pending=a.owner_scope==='business' && Number(a.available_for_spending??1)===0;
+    const type=pending?'A compensar · fora do PODE USAR':a.account_type==='cash'?'Dinheiro físico':a.owner_scope==='business'?'Empresa · disponível':'Pessoal';
+    return `<article class="list-card"><div class="row"><div><h3>${esc(a.name)}</h3><p>${type}</p></div><div class="money">${money(a.balance_cents)}</div></div><div class="row" style="margin-top:12px"><span class="muted small">Saldo inicial: ${money(a.opening_balance_cents)}</span><button class="mini-btn" data-opening="${a.id}">Definir saldo inicial</button></div></article>`;
+  }).join('');
   document.querySelectorAll('[data-opening]').forEach(btn=>btn.addEventListener('click',()=>setOpeningBalance(Number(btn.dataset.opening))));
 }
 
@@ -187,7 +193,7 @@ async function createObligation(){
   const nature=kind.startsWith('p')?'personal_withdrawal':kind.startsWith('e')?'business_operating':kind.startsWith('est')?'inventory':'business_operating';
   const dueRaw=prompt('Dia do vencimento (deixe vazio se não souber):','');
   try{
-    await api('/api/obligations',{method:'POST',body:JSON.stringify({name:name.trim(),nature,scope:nature==='personal_withdrawal'?'personal':'business',monthly_target_cents:parseMoney(value),due_day:dueRaw?Number(dueRaw):null,flexible:false,counts_in_daily_target:nature!=='inventory'})});
+    await api('/api/obligations',{method:'POST',body:JSON.stringify({name:name.trim(),nature,scope:nature==='personal_withdrawal'?'personal':'business',monthly_target_cents:parseNonNegativeMoney(value),due_day:dueRaw?Number(dueRaw):null,flexible:false,counts_in_daily_target:nature!=='inventory'})});
     toast('Compromisso cadastrado.'); await loadAll();
   }catch(err){toast(err.message)}
 }
@@ -196,7 +202,7 @@ async function editObligation(id){
   const o=state.obligations.find(x=>x.id===id); if(!o)return;
   const value=prompt(`Valor/meta mensal de ${o.name}:`,(o.monthly_target_cents/100).toFixed(2).replace('.',',')); if(value==null)return;
   const dueRaw=prompt('Dia do vencimento (vazio = sem vencimento definido):',o.due_day||''); if(dueRaw==null)return;
-  try{await api(`/api/obligations/${id}`,{method:'PATCH',body:JSON.stringify({monthly_target_cents:parseMoney(value),due_day:dueRaw?Number(dueRaw):null})});toast('Compromisso atualizado.');await loadAll()}catch(err){toast(err.message)}
+  try{await api(`/api/obligations/${id}`,{method:'PATCH',body:JSON.stringify({monthly_target_cents:parseNonNegativeMoney(value),due_day:dueRaw?Number(dueRaw):null})});toast('Compromisso atualizado.');await loadAll()}catch(err){toast(err.message)}
 }
 
 async function createDebt(){
@@ -266,6 +272,7 @@ async function api(url,options={},auth=true){
 }
 
 function parseMoney(v){ const n=Number(String(v).replace(/\./g,'').replace(',','.')); if(!Number.isFinite(n)||n<=0)throw new Error('Informe um valor válido.'); return Math.round(n*100); }
+function parseNonNegativeMoney(v){ const n=Number(String(v).replace(/\./g,'').replace(',','.')); if(!Number.isFinite(n)||n<0)throw new Error('Informe um valor igual ou maior que zero.'); return Math.round(n*100); }
 function parseSignedMoney(v){ const n=Number(String(v).replace(/\./g,'').replace(',','.')); if(!Number.isFinite(n))throw new Error('Informe um valor válido.'); return Math.round(n*100); }
 function labelNature(n){return({business_operating:'Empresa · operação',inventory:'Compras/estoque',business_debt:'Dívida da empresa',personal_withdrawal:'Retirada pessoal',income:'Receita',transfer:'Transferência',unidentified:'Não identificado'})[n]||n}
 function empty(text){return `<div class="notice muted">${esc(text)}</div>`}
