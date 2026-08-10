@@ -61,6 +61,7 @@ function renderObligations(){
   document.querySelectorAll('[data-reserve]').forEach(b=>b.addEventListener('click',()=>addReserve(Number(b.dataset.reserve))));
   document.querySelectorAll('[data-edit-obligation]').forEach(b=>b.addEventListener('click',()=>editObligation(Number(b.dataset.editObligation))));
   document.querySelectorAll('[data-pay-obligation]').forEach(b=>b.addEventListener('click',()=>prepareObligationPayment(Number(b.dataset.payObligation))));
+  document.querySelectorAll('[data-opening-paid]').forEach(b=>b.addEventListener('click',()=>markPaidBeforeOpening(Number(b.dataset.openingPaid))));
 }
 
 function obligationCard(o,compact){
@@ -68,7 +69,7 @@ function obligationCard(o,compact){
   const labels=[]; if(o.due_date)labels.push(`vence ${dateBR(o.due_date)}`); else if(o.due_day)labels.push(`vence dia ${o.due_day}`); if(o.overdue)labels.push('ATRASADA'); if(o.personal_ceiling_member)labels.push('teto pessoal'); if(!o.counts_in_daily_target)labels.push('sem reserva automática');
   return `<article class="list-card ${o.overdue?'overdue':''}"><div class="row top"><div><h3>${esc(o.name)}</h3><p>${labelNature(o.nature)}${labels.length?' · '+labels.join(' · '):''}</p></div><div class="money">${money(target)}</div></div>
     ${target>0?`<div class="progress"><span style="width:${pct(covered,target)}%"></span></div><div class="subline"><span>${paid?`Pago ${money(paid)}`:'Pago R$ 0,00'}${reserved?` · reservado ${money(reserved)}`:''}</span><span>Falta ${money(remaining)}</span></div>`:''}
-    ${compact?'':`<div class="actions"><button class="mini-btn" data-pay-obligation="${o.id}">Pagar</button>${o.counts_in_daily_target?`<button class="mini-btn" data-reserve="${o.id}">+ Reservar</button>`:''}<button class="mini-btn" data-edit-obligation="${o.id}">Editar</button></div>`}</article>`;
+    ${compact?'':`<div class="actions"><button class="mini-btn" data-pay-obligation="${o.id}">Pagar agora</button>${remaining>0?`<button class="mini-btn" data-opening-paid="${o.id}">Já pago antes do app</button>`:''}${o.counts_in_daily_target?`<button class="mini-btn" data-reserve="${o.id}">+ Reservar</button>`:''}<button class="mini-btn" data-edit-obligation="${o.id}">Editar</button></div>`}</article>`;
 }
 
 function renderDebts(){
@@ -155,6 +156,21 @@ async function reconcileCash(e){e.preventDefault();try{const cash=state.accounts
 
 function prepareDebtPayment(id){const d=state.debts.find(x=>x.id===id);if(!d)return;showView('lancar');setDirection('expense');$('nature').value=d.scope==='personal'?'personal_withdrawal':'business_debt';renderSelectors();$('debt').value=String(id);$('description').value=`Pagamento ${d.name}`;$('amount').focus();}
 function prepareObligationPayment(id){const o=state.obligations.find(x=>x.id===id);if(!o)return;showView('lancar');setDirection('expense');$('nature').value=o.nature;renderSelectors();$('obligation').value=String(id);if(o.debt_id)$('debt').value=String(o.debt_id);$('description').value=`Pagamento ${o.name}`;$('amount').focus();renderWithdrawalPreview();}
+
+async function markPaidBeforeOpening(id){
+  const o=state.obligations.find(x=>x.id===id); if(!o)return;
+  const remaining=Number(o.remaining_cents||0); if(remaining<=0){toast('Esta conta já está paga no período.');return;}
+  const value=prompt(`Quanto de ${o.name} já foi pago antes de começar o app?\nIsso NÃO será descontado novamente dos saldos atuais.`,centsToInput(remaining));
+  if(value==null)return;
+  const paidDate=prompt('Data aproximada do pagamento (AAAA-MM-DD). Se não souber, deixe vazio.','');
+  if(paidDate==null)return;
+  const msg=`Confirmar ${money(parseMoney(value))} como JÁ PAGO antes da fotografia inicial?\n\nO compromisso será reduzido, mas Mercado Pago/Nubank/Dinheiro NÃO serão descontados novamente.`;
+  if(!confirm(msg))return;
+  try{
+    await api(`/api/obligations/${id}/opening-paid`,{method:'POST',body:JSON.stringify({amount_cents:parseMoney(value),paid_date:paidDate.trim()||null})});
+    toast('Pagamento anterior registrado sem alterar os saldos atuais.'); await loadAll();
+  }catch(err){toast(err.message);}
+}
 
 async function addReserve(id){const o=state.obligations.find(x=>x.id===id);if(!o)return;const value=prompt(`Quanto deseja marcar como reservado para ${o.name}?`);if(value==null)return;try{await api('/api/reserves',{method:'POST',body:JSON.stringify({obligation_id:id,amount_cents:parseMoney(value)})});toast('Reserva registrada.');await loadAll();}catch(err){toast(err.message);}}
 async function editObligation(id){const o=state.obligations.find(x=>x.id===id);if(!o)return;const value=prompt(`Valor mensal de ${o.name}`,centsToInput(o.monthly_target_cents));if(value==null)return;const due=prompt('Dia de vencimento (vazio se não houver)',o.due_day||'');try{await api(`/api/obligations/${id}`,{method:'PATCH',body:JSON.stringify({monthly_target_cents:parseMoney(value),due_day:due||null})});toast('Conta atualizada.');await loadAll();}catch(err){toast(err.message);}}

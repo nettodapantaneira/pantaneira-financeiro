@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.1.0" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.1.1" });
       }
 
       if (url.pathname === "/api/auth/status" && request.method === "GET") {
@@ -102,6 +102,30 @@ export default {
         await env.DB.prepare(`UPDATE obligations SET name=?,monthly_target_cents=?,due_day=?,due_date=?,flexible=?,priority=?,counts_in_daily_target=?,personal_ceiling_member=?,active=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
           .bind(v.name,v.monthly_target_cents,v.due_day,v.due_date,v.flexible,v.priority,v.counts,v.ceiling,v.active,v.notes,id).run();
         return json({ok:true});
+      }
+
+      const openingPaidMatch=url.pathname.match(/^\/api\/obligations\/(\d+)\/opening-paid$/);
+      if(openingPaidMatch && request.method==="POST"){
+        const id=Number(openingPaidMatch[1]); const body=await readJson(request);
+        const obligation=await env.DB.prepare("SELECT * FROM obligations WHERE id=? AND active=1").bind(id).first();
+        if(!obligation)return json({error:"Compromisso não encontrado."},404);
+        const periodKey=String(body.period_key||targetPeriodForRawObligation(obligation,new Date()));
+        const paidRow=await env.DB.prepare("SELECT COALESCE(SUM(amount_cents),0) total FROM transactions WHERE obligation_id=? AND period_key=? AND direction='expense' AND status!='void'").bind(id,periodKey).first();
+        const alreadyPaid=Number(paidRow?.total||0); const target=Number(obligation.monthly_target_cents||0); const remaining=Math.max(0,target-alreadyPaid);
+        if(remaining<=0)return json({error:"Esta conta já está marcada como paga no período."},400);
+        const amount=body.amount_cents==null?remaining:toPositiveInteger(body.amount_cents,"amount_cents");
+        if(amount>remaining)return json({error:`O valor informado supera o que falta pagar (${formatCents(remaining)}).`},400);
+        let paidDate=null;
+        if(body.paid_date!=null && body.paid_date!=="") paidDate=optionalIsoDate(body.paid_date);
+        const occurredAt=paidDate?`${paidDate}T16:00:00.000Z`:`${periodKey}-01T16:00:00.000Z`;
+        await env.DB.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,obligation_id,debt_id,description,notes,payment_method,recurrence_type,status)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+            occurredAt,periodKey,"expense",amount,null,null,obligation.nature,obligation.category_id,id,null,
+            `${obligation.name} - pago antes da implantação`,
+            `Pagamento ocorrido antes da fotografia inicial dos saldos. Não movimenta conta para evitar desconto em duplicidade.${paidDate?` Data informada: ${paidDate}.`:" Data exata não informada."}`,
+            "other","eventual","posted"
+          ).run();
+        return json({ok:true,amount_cents:amount,period_key:periodKey});
       }
 
       if(url.pathname==="/api/reserves" && request.method==="POST"){
