@@ -7,13 +7,19 @@ boot();
 
 async function boot(){
   registerServiceWorker();
+  $('loginView').hidden=true;
+  $('app').hidden=true;
   const status = await api('/api/auth/status',{},false).catch(()=>({configured:false,authenticated:false}));
   if(!status.configured){
     $('loginView').hidden=false;
     $('loginHint').textContent='Antes do primeiro acesso, configure APP_PASSWORD e SESSION_SECRET no Cloudflare.';
     return;
   }
-  if(!status.authenticated){ $('loginView').hidden=false; return; }
+  if(!status.authenticated){
+    $('loginView').hidden=false;
+    return;
+  }
+  $('loginView').hidden=true;
   $('app').hidden=false;
   bindEvents();
   await loadAll();

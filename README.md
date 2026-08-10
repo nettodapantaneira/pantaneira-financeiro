@@ -1,4 +1,4 @@
-# Pantaneira Financeiro v1.0.0
+# Pantaneira Financeiro v1.0.1
 
 MVP financeiro independente para controle diário da Pantaneira.
 
@@ -19,7 +19,7 @@ MVP financeiro independente para controle diário da Pantaneira.
 1. Instale Node.js 20+ e, dentro da pasta, execute `npm install`.
 2. Autentique o Wrangler: `npx wrangler login`.
 3. Crie o D1: `npx wrangler d1 create pantaneira-financeiro-db`.
-4. Copie o `database_id` retornado e substitua o UUID `00000000-0000-0000-0000-000000000000` em `wrangler.jsonc`.
+4. O `wrangler.jsonc` desta versão já contém o `database_id` do banco `pantaneira-financeiro-db` deste projeto.
 5. Aplique a migration remota: `npm run db:migrate:remote`.
 6. Crie os segredos:
    - `npx wrangler secret put APP_PASSWORD`
@@ -32,7 +32,7 @@ MVP financeiro independente para controle diário da Pantaneira.
 - Copie `.dev.vars.example` para `.dev.vars` e altere os valores.
 - `npm run db:migrate:local`
 - `npm run dev`
-Deploy inicial com migrations D1 configuradas.
+
 ## Regra de negócio central
 O saldo bancário não é o dinheiro livre. O app calcula o dinheiro livre descontando os compromissos rígidos ainda não reservados e calcula quanto precisa ser protegido por dia.
 
