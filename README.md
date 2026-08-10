@@ -54,3 +54,11 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - Receitas detalhadas com Vendas da loja e Outras entradas.
 - Dashboard mensal com Faturamento informado, Pago/Saiu no mês e Entrou - Saiu.
 - Contas fixas já pagas antes do app podem ser vinculadas diretamente na aba Antes para reduzir o valor pendente sem descontar o saldo atual novamente.
+
+## v1.2.1 — edição e cancelamento seguro
+- Todo lançamento comum e todo lançamento em **Antes do app** ganhou ação **Editar**.
+- É possível corrigir data, valor, descrição, natureza, categoria, conta de origem/destino, forma de pagamento e vínculos com compromisso/dívida quando aplicável.
+- A correção recalcula automaticamente saldos, contas, teto pessoal e dívidas.
+- Lançamentos do período inicial continuam sem movimentar os saldos atuais mesmo quando editados.
+- A opção **Cancelar lançamento** tira o item dos cálculos sem apagar o registro; ele permanece visível como CANCELADO.
+- Toda edição/cancelamento é registrada em `transaction_revisions` para auditoria.

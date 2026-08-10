@@ -211,12 +211,86 @@ export default {
 
       const transactionMatch=url.pathname.match(/^\/api\/transactions\/(\d+)$/);
       if(transactionMatch && request.method==="PATCH"){
-        const id=Number(transactionMatch[1]); const body=await readJson(request); const current=await env.DB.prepare("SELECT * FROM transactions WHERE id=?").bind(id).first(); if(!current)return json({error:"Lançamento não encontrado."},404);
-        const nature=body.nature===undefined?current.nature:String(body.nature); if(!ALLOWED_NATURES.includes(nature))return json({error:"Natureza inválida."},400);
-        let categoryId=body.category_id===undefined?current.category_id:(body.category_id==null?null:toInteger(body.category_id,"category_id"));
-        if(!categoryId && nature!=="unidentified"){const c=await env.DB.prepare("SELECT id FROM categories WHERE nature=? AND active=1 ORDER BY id LIMIT 1").bind(nature).first();categoryId=c?.id||null;}
-        await env.DB.prepare("UPDATE transactions SET nature=?,category_id=?,description=?,notes=?,status=? WHERE id=?")
-          .bind(nature,categoryId,body.description===undefined?current.description:String(body.description).trim(),body.notes===undefined?current.notes:nullable(body.notes),body.status||"posted",id).run();
+        const id=Number(transactionMatch[1]); const body=await readJson(request);
+        const current=await env.DB.prepare("SELECT * FROM transactions WHERE id=?").bind(id).first();
+        if(!current)return json({error:"Lançamento não encontrado."},404);
+        if(current.status==="void")return json({error:"Lançamento cancelado não pode ser editado."},400);
+
+        const isOpening=Number(current.opening_history||0)===1;
+        if(current.purchase_id && !current.obligation_id && !isOpening && (body.amount_cents!==undefined || body.direction!==undefined || body.source_account_id!==undefined || body.destination_account_id!==undefined)){
+          return json({error:"Este lançamento é o pagamento inicial de uma compra. Para não desalinhar a compra, edite apenas descrição, categoria ou observação por enquanto."},400);
+        }
+
+        let next;
+        if(isOpening){
+          const direction=body.direction===undefined?current.direction:String(body.direction);
+          if(!["income","expense"].includes(direction))return json({error:"Histórico anterior aceita somente entrada ou saída."},400);
+          let nature=body.nature===undefined?current.nature:String(body.nature);
+          if(direction==="income")nature="income";
+          if(direction==="expense" && !["business_operating","inventory","business_debt","personal_withdrawal"].includes(nature))return json({error:"Natureza inválida para saída anterior."},400);
+          const amount=body.amount_cents===undefined?Number(current.amount_cents):toPositiveInteger(body.amount_cents,"amount_cents");
+          const description=body.description===undefined?current.description:String(body.description||"").trim(); if(!description)return json({error:"Descrição obrigatória."},400);
+          let occurredAt=current.occurred_at;
+          if(body.occurred_at!==undefined){
+            const paidDate=optionalIsoDate(String(body.occurred_at).slice(0,10));
+            if(!paidDate || paidDate<"2026-08-01" || paidDate>"2026-08-10")return json({error:"A data do histórico inicial deve ficar entre 01/08 e 10/08/2026."},400);
+            occurredAt=`${paidDate}T16:00:00.000Z`;
+          }
+          const periodKey=periodKeyFromIso(occurredAt);
+          let categoryId=body.category_id===undefined?current.category_id:(body.category_id==null?null:toInteger(body.category_id,"category_id"));
+          categoryId=await validCategoryForNature(env.DB,categoryId,nature);
+          let obligationId=direction==="expense"?(body.obligation_id===undefined?current.obligation_id:(body.obligation_id==null?null:toInteger(body.obligation_id,"obligation_id"))):null;
+          await validateObligationPayment(env.DB,obligationId,nature,periodKey,amount,id);
+          next={occurred_at:occurredAt,period_key:periodKey,direction,amount_cents:amount,source_account_id:null,destination_account_id:null,nature,category_id:categoryId,obligation_id:obligationId,debt_id:null,description,notes:body.notes===undefined?current.notes:nullable(body.notes),payment_method:body.payment_method===undefined?current.payment_method:normalizePaymentMethod(body.payment_method),recurrence_type:current.recurrence_type||"eventual",status:"posted",supplier_id:current.supplier_id,purchase_id:current.purchase_id};
+        }else{
+          const candidate={
+            direction:body.direction===undefined?current.direction:body.direction,
+            amount_cents:body.amount_cents===undefined?Number(current.amount_cents):body.amount_cents,
+            source_account_id:body.source_account_id===undefined?current.source_account_id:body.source_account_id,
+            destination_account_id:body.destination_account_id===undefined?current.destination_account_id:body.destination_account_id,
+            nature:body.nature===undefined?current.nature:body.nature,
+            category_id:body.category_id===undefined?current.category_id:body.category_id,
+            obligation_id:body.obligation_id===undefined?current.obligation_id:body.obligation_id,
+            debt_id:body.debt_id===undefined?current.debt_id:body.debt_id,
+            supplier_id:body.supplier_id===undefined?current.supplier_id:body.supplier_id,
+            purchase_id:body.purchase_id===undefined?current.purchase_id:body.purchase_id,
+            description:body.description===undefined?current.description:body.description,
+            notes:body.notes===undefined?current.notes:body.notes,
+            payment_method:body.payment_method===undefined?current.payment_method:body.payment_method,
+            recurrence_type:body.recurrence_type===undefined?current.recurrence_type:body.recurrence_type,
+            occurred_at:body.occurred_at===undefined?current.occurred_at:body.occurred_at
+          };
+          next=validateTransaction(candidate);
+          next.category_id=await validCategoryForNature(env.DB,next.category_id,next.nature);
+          await validateObligationPayment(env.DB,next.obligation_id,next.nature,next.period_key,next.amount_cents,id);
+        }
+
+        const beforeJson=JSON.stringify(current);
+        if(current.debt_id && current.direction==="expense" && current.status!=="void" && !isOpening) await restoreDebt(env.DB,Number(current.debt_id),Number(current.amount_cents));
+
+        await env.DB.prepare(`UPDATE transactions SET occurred_at=?,period_key=?,direction=?,amount_cents=?,source_account_id=?,destination_account_id=?,nature=?,category_id=?,obligation_id=?,debt_id=?,description=?,notes=?,payment_method=?,recurrence_type=?,status=?,supplier_id=?,purchase_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+          .bind(next.occurred_at,next.period_key,next.direction,next.amount_cents,next.source_account_id,next.destination_account_id,next.nature,next.category_id,next.obligation_id,next.debt_id,next.description,next.notes,next.payment_method,next.recurrence_type,next.status||"posted",next.supplier_id,next.purchase_id,id).run();
+
+        if(next.debt_id && next.direction==="expense" && !isOpening) await reduceDebt(env.DB,Number(next.debt_id),Number(next.amount_cents));
+        if(current.purchase_id || current.obligation_id) await syncPurchaseFromTransaction(env.DB,current.purchase_id,current.obligation_id);
+        if(next.purchase_id || next.obligation_id) await syncPurchaseFromTransaction(env.DB,next.purchase_id,next.obligation_id);
+        const updated=await env.DB.prepare("SELECT * FROM transactions WHERE id=?").bind(id).first();
+        await logTransactionRevision(env.DB,id,"edit",beforeJson,JSON.stringify(updated));
+        return json({ok:true,transaction:updated});
+      }
+
+      if(transactionMatch && request.method==="DELETE"){
+        const id=Number(transactionMatch[1]);
+        const current=await env.DB.prepare("SELECT * FROM transactions WHERE id=?").bind(id).first();
+        if(!current)return json({error:"Lançamento não encontrado."},404);
+        if(current.status==="void")return json({ok:true,already_void:true});
+        if(current.purchase_id && !current.obligation_id && !Number(current.opening_history||0))return json({error:"Este lançamento pertence ao pagamento inicial de uma compra. O cancelamento da compra será tratado na tela de Compras."},400);
+        const beforeJson=JSON.stringify(current);
+        if(current.debt_id && current.direction==="expense" && !Number(current.opening_history||0)) await restoreDebt(env.DB,Number(current.debt_id),Number(current.amount_cents));
+        await env.DB.prepare("UPDATE transactions SET status='void',updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
+        if(current.purchase_id || current.obligation_id) await syncPurchaseFromTransaction(env.DB,current.purchase_id,current.obligation_id);
+        const updated=await env.DB.prepare("SELECT * FROM transactions WHERE id=?").bind(id).first();
+        await logTransactionRevision(env.DB,id,"void",beforeJson,JSON.stringify(updated));
         return json({ok:true});
       }
 
@@ -343,7 +417,7 @@ async function listDebts(db){
 }
 
 async function listTransactions(db,limit){
-  const {results}=await db.prepare(`SELECT t.id,t.occurred_at,t.direction,t.amount_cents,t.nature,t.description,t.notes,t.payment_method,t.recurrence_type,t.status,t.opening_history,t.obligation_id,t.debt_id,t.supplier_id,t.purchase_id,
+  const {results}=await db.prepare(`SELECT t.id,t.occurred_at,t.period_key,t.direction,t.amount_cents,t.source_account_id,t.destination_account_id,t.nature,t.category_id,t.description,t.notes,t.payment_method,t.recurrence_type,t.status,t.opening_history,t.obligation_id,t.debt_id,t.supplier_id,t.purchase_id,
     sa.name source_account,da.name destination_account,c.name category_name,s.name supplier_name,d.name debt_name
     FROM transactions t LEFT JOIN accounts sa ON sa.id=t.source_account_id LEFT JOIN accounts da ON da.id=t.destination_account_id LEFT JOIN categories c ON c.id=t.category_id LEFT JOIN suppliers s ON s.id=t.supplier_id LEFT JOIN debts d ON d.id=t.debt_id
     ORDER BY t.occurred_at DESC,t.id DESC LIMIT ?`).bind(limit).all();
@@ -405,6 +479,39 @@ async function createDebtObligation(db,debtId,name,scope,target,dueDay,priority)
 async function reduceDebt(db,debtId,amount){
   await db.prepare(`UPDATE debts SET current_balance_cents=CASE WHEN current_balance_cents IS NULL THEN NULL ELSE MAX(0,current_balance_cents-?) END,
     status=CASE WHEN current_balance_cents IS NOT NULL AND current_balance_cents-?<=0 THEN 'paid' ELSE status END,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(amount,amount,debtId).run();
+}
+
+async function restoreDebt(db,debtId,amount){
+  await db.prepare(`UPDATE debts SET current_balance_cents=CASE WHEN current_balance_cents IS NULL THEN NULL ELSE current_balance_cents+? END,
+    status=CASE WHEN current_balance_cents IS NULL THEN status ELSE 'active' END,updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(amount,debtId).run();
+}
+
+async function validCategoryForNature(db,categoryId,nature){
+  let id=categoryId==null?null:Number(categoryId);
+  if(id){
+    const cat=await db.prepare("SELECT id,nature FROM categories WHERE id=? AND active=1").bind(id).first();
+    if(!cat || cat.nature!==nature)throw new Error("Categoria incompatível com a natureza escolhida.");
+    return id;
+  }
+  if(nature==="unidentified")return null;
+  const c=await db.prepare("SELECT id FROM categories WHERE nature=? AND active=1 ORDER BY id LIMIT 1").bind(nature).first();
+  return c?.id||null;
+}
+
+async function validateObligationPayment(db,obligationId,nature,periodKey,amount,excludeTransactionId=null){
+  if(!obligationId)return;
+  const o=await db.prepare("SELECT * FROM obligations WHERE id=? AND active=1").bind(obligationId).first();
+  if(!o)throw new Error("Conta/compromisso não encontrado.");
+  if(o.nature!==nature)throw new Error("A conta selecionada não combina com a natureza do lançamento.");
+  const row=await db.prepare("SELECT COALESCE(SUM(amount_cents),0) total FROM transactions WHERE obligation_id=? AND period_key=? AND direction='expense' AND status!='void' AND id!=?")
+    .bind(obligationId,periodKey,excludeTransactionId||-1).first();
+  const remaining=Math.max(0,Number(o.monthly_target_cents||0)-Number(row?.total||0));
+  if(Number(amount)>remaining)throw new Error(`O valor supera o que falta pagar desta conta (${formatCents(remaining)}).`);
+}
+
+async function logTransactionRevision(db,transactionId,action,beforeJson,afterJson){
+  await db.prepare("INSERT INTO transaction_revisions(transaction_id,action,before_json,after_json) VALUES(?,?,?,?)")
+    .bind(transactionId,action,beforeJson,afterJson||null).run();
 }
 
 async function syncPurchaseFromTransaction(db,purchaseId,obligationId){

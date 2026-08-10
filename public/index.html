@@ -201,7 +201,7 @@
           <article class="metric"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.2.0</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.2.1</strong></article>
         </div>
         <div class="section-title"><h2>Compras recentes</h2></div><div id="purchasesList" class="stack"></div>
         <div class="section-title"><h2>Últimos lançamentos</h2></div><div id="transactionsList" class="stack"></div>
@@ -220,6 +220,34 @@
       <button data-view="relatorios"><span>≡</span><small>Resumo</small></button>
     </nav>
   </div>
+
+
+  <dialog id="editTransactionDialog">
+    <form id="editTransactionForm" class="dialog-form" method="dialog">
+      <div class="dialog-head"><strong>Editar lançamento</strong><button type="button" id="closeEditTransaction">×</button></div>
+      <div class="dialog-body">
+        <input type="hidden" id="editTransactionId" />
+        <div id="editOpeningNotice" class="notice warning" hidden>Este lançamento pertence ao período <b>Antes do app</b>. A edição atualiza o histórico, mas continua sem movimentar os saldos atuais.</div>
+        <label>Data</label><input id="editDate" type="date" required />
+        <label>Tipo</label>
+        <select id="editDirection"><option value="expense">Saída</option><option value="income">Entrada</option><option value="transfer">Transferência</option></select>
+        <label>Valor</label><input id="editAmount" inputmode="decimal" required />
+        <label>Descrição</label><input id="editDescription" required />
+        <label>Natureza</label>
+        <select id="editNature">
+          <option value="business_operating">Empresa · operação</option><option value="inventory">Empresa · compra/estoque</option><option value="business_debt">Empresa · dívida</option><option value="personal_withdrawal">Retirada pessoal</option><option value="income">Receita</option><option value="transfer">Transferência</option><option value="unidentified">Não identificado</option>
+        </select>
+        <label>Categoria</label><select id="editCategory"></select>
+        <div id="editObligationWrap"><label>Conta/compromisso</label><select id="editObligation"></select></div>
+        <div id="editDebtWrap"><label>Dívida</label><select id="editDebt"></select></div>
+        <div id="editSourceWrap"><label>De onde saiu?</label><select id="editSourceAccount"></select></div>
+        <div id="editDestinationWrap"><label>Onde entrou?</label><select id="editDestinationAccount"></select></div>
+        <label>Forma</label><select id="editPaymentMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra</option></select>
+        <label>Observação</label><textarea id="editNotes" rows="3"></textarea>
+        <div class="dialog-actions"><button type="button" id="voidTransactionBtn" class="btn danger-outline compact-danger">Cancelar lançamento</button><button type="submit" class="btn primary">Salvar alterações</button></div>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="protectionDialog"><div class="dialog-head"><strong>Cálculo da proteção diária</strong><button id="closeProtection">×</button></div><div id="protectionItems" class="stack"></div></dialog>
   <script type="module" src="/app.js"></script>

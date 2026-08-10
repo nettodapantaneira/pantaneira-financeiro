@@ -24,12 +24,14 @@ function bindEvents(){
   $('nature').addEventListener('change',renderSelectors); $('openingNature').addEventListener('change',renderOpeningSelectors); $('amount').addEventListener('input',renderWithdrawalPreview); $('obligation').addEventListener('change',renderWithdrawalPreview);
   $('purchaseTotal').addEventListener('input',renderPurchaseSummary); $('purchasePaidNow').addEventListener('input',renderPurchaseSummary);
   $('newObligationBtn').addEventListener('click',createObligation); $('newDebtBtn').addEventListener('click',createDebt);
+  $('closeEditTransaction').addEventListener('click',()=>$('editTransactionDialog').close()); $('editTransactionForm').addEventListener('submit',saveTransactionEdit); $('voidTransactionBtn').addEventListener('click',voidCurrentTransaction);
+  $('editDirection').addEventListener('change',renderEditSelectors); $('editNature').addEventListener('change',renderEditSelectors);
 }
 
 async function loadAll(){
   try{
     const [dashboard,accounts,categories,obligations,debts,transactions,suppliers,purchases]=await Promise.all([
-      api('/api/dashboard'),api('/api/accounts'),api('/api/categories'),api('/api/obligations'),api('/api/debts'),api('/api/transactions?limit=40'),api('/api/suppliers'),api('/api/purchases')
+      api('/api/dashboard'),api('/api/accounts'),api('/api/categories'),api('/api/obligations'),api('/api/debts'),api('/api/transactions?limit=120'),api('/api/suppliers'),api('/api/purchases')
     ]);
     Object.assign(state,{dashboard,accounts:accounts.accounts,categories:categories.categories,obligations:obligations.obligations,debts:debts.debts,transactions:transactions.transactions,suppliers:suppliers.suppliers,purchases:purchases.purchases});
     renderAll();
@@ -83,12 +85,23 @@ function renderDebts(){
 }
 
 function renderTransactions(){
-  $('transactionsList').innerHTML=state.transactions.map(t=>`<article class="list-card"><div class="row top"><div><h3>${esc(t.description)}</h3><p>${dateTimeBR(t.occurred_at)} · ${esc(t.source_account||t.destination_account||(Number(t.opening_history)?'histórico antes do app':'sem movimentação de conta'))}${t.supplier_name?` · ${esc(t.supplier_name)}`:''}${t.status==='pending_reclassification'?' · NÃO IDENTIFICADO':''}${Number(t.opening_history)?' · ANTES DO APP':''}</p></div><div class="money ${t.direction==='income'?'positive':''}">${t.direction==='income'?'+':'-'}${money(t.amount_cents)}</div></div><div class="subline"><span>${labelNature(t.nature)}</span><span>${esc(t.category_name||'')}</span></div></article>`).join('')||empty('Nenhum lançamento ainda.');
+  $('transactionsList').innerHTML=state.transactions.map(t=>transactionCard(t,false)).join('')||empty('Nenhum lançamento ainda.');
+  document.querySelectorAll('#transactionsList [data-edit-transaction]').forEach(b=>b.addEventListener('click',()=>openTransactionEditor(Number(b.dataset.editTransaction))));
 }
 
 function renderOpeningTransactions(){
   const items=state.transactions.filter(t=>Number(t.opening_history)===1);
-  $('openingTransactionsList').innerHTML=items.map(t=>`<article class="list-card"><div class="row top"><div><h3>${esc(t.description)}</h3><p>${dateBR(t.occurred_at)} · não altera o saldo inicial</p></div><div class="money ${t.direction==='income'?'positive':''}">${t.direction==='income'?'+':'-'}${money(t.amount_cents)}</div></div><div class="subline"><span>${labelNature(t.nature)}</span><span>${esc(t.category_name||'')}</span></div></article>`).join('')||empty('Ainda não informou gastos ou entradas anteriores à implantação.');
+  $('openingTransactionsList').innerHTML=items.map(t=>transactionCard(t,true)).join('')||empty('Ainda não informou gastos ou entradas anteriores à implantação.');
+  document.querySelectorAll('#openingTransactionsList [data-edit-transaction]').forEach(b=>b.addEventListener('click',()=>openTransactionEditor(Number(b.dataset.editTransaction))));
+}
+
+function transactionCard(t,openingOnly){
+  const isVoid=t.status==='void',opening=Number(t.opening_history)===1;
+  const account=t.source_account||t.destination_account||(opening?'histórico antes do app':'sem movimentação de conta');
+  const when=openingOnly?dateBR(t.occurred_at):dateTimeBR(t.occurred_at);
+  const meta=[when,account,t.supplier_name||null,t.status==='pending_reclassification'?'NÃO IDENTIFICADO':null,opening&&!openingOnly?'ANTES DO APP':null,isVoid?'CANCELADO':null].filter(Boolean).map(esc).join(' · ');
+  const sign=t.direction==='income'?'+':t.direction==='transfer'?'↔':'-';
+  return `<article class="list-card ${isVoid?'voided':''}"><div class="row top"><div><h3>${esc(t.description)}</h3><p>${meta}</p></div><div class="money ${t.direction==='income'?'positive':''}">${sign}${money(t.amount_cents)}</div></div><div class="subline"><span>${labelNature(t.nature)}</span><span>${esc(t.category_name||'')}</span></div>${isVoid?'':`<div class="edit-actions"><button class="mini-btn" data-edit-transaction="${t.id}">Editar</button></div>`}</article>`;
 }
 
 function renderAccounts(){
@@ -166,6 +179,51 @@ function renderWithdrawalPreview(){
   if(!state.dashboard||$('direction').value!=='expense'||$('nature').value!=='personal_withdrawal'){$('withdrawalPreview').hidden=true;return;}
   const amount=safeParseMoney($('amount').value); const p=state.dashboard.personal; $('withdrawalPreview').hidden=false;
   $('withdrawalPreview').innerHTML=`Teto pessoal do mês: <b>${money(p.ceiling_cents)}</b><br>Já retirado: <b>${money(p.withdrawn_cents)}</b><br>Restante antes desta retirada: <b>${money(p.ceiling_remaining_cents)}</b>${amount?`<br>Após este lançamento: <b>${money(p.ceiling_remaining_cents-amount)}</b>`:''}`;
+}
+
+
+function openTransactionEditor(id){
+  const t=state.transactions.find(x=>Number(x.id)===Number(id)); if(!t)return;
+  $('editTransactionId').value=String(t.id); $('editOpeningNotice').hidden=!Number(t.opening_history);
+  $('editDate').value=String(t.occurred_at).slice(0,10); $('editDirection').value=t.direction; $('editAmount').value=centsToInput(t.amount_cents); $('editDescription').value=t.description||''; $('editNature').value=t.nature; $('editPaymentMethod').value=t.payment_method||'other'; $('editNotes').value=t.notes||'';
+  $('editDirection').disabled=Boolean(Number(t.opening_history))?false:false;
+  renderEditSelectors(t);
+  $('editTransactionDialog').showModal();
+}
+
+function renderEditSelectors(selected=null){
+  const id=Number($('editTransactionId').value||0); const t=selected||state.transactions.find(x=>Number(x.id)===id)||{}; const opening=Boolean(Number(t.opening_history));
+  let direction=$('editDirection').value,nature=$('editNature').value;
+  if(direction==='income'){nature='income';$('editNature').value='income';} else if(direction==='transfer'){nature='transfer';$('editNature').value='transfer';} else if(['income','transfer','unidentified'].includes(nature)){nature='business_operating';$('editNature').value=nature;}
+  if(opening&&direction==='transfer'){direction='expense';$('editDirection').value='expense';nature='business_operating';$('editNature').value=nature;}
+  $('editNature').disabled=direction!=='expense';
+  const cats=state.categories.filter(c=>c.nature===nature); $('editCategory').innerHTML='<option value="">Sem categoria</option>'+cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  const obs=state.obligations.filter(o=>o.active&&o.nature===nature); $('editObligation').innerHTML='<option value="">Nenhum / não se aplica</option>'+obs.map(o=>`<option value="${o.id}">${esc(o.name)} · falta ${money(o.remaining_cents)}</option>`).join('');
+  const debtScope=nature==='personal_withdrawal'?'personal':'business'; const debts=state.debts.filter(d=>d.scope===debtScope&&(d.status==='active'||Number(d.id)===Number(t.debt_id))); $('editDebt').innerHTML='<option value="">Nenhuma / não se aplica</option>'+debts.map(d=>`<option value="${d.id}">${esc(d.name)}${d.current_balance_cents!=null?` · ${money(d.current_balance_cents)}`:''}</option>`).join('');
+  const accounts=state.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} · ${money(a.balance_cents)}</option>`).join(''); $('editSourceAccount').innerHTML=accounts; $('editDestinationAccount').innerHTML=accounts;
+  $('editSourceWrap').hidden=opening||direction==='income'; $('editDestinationWrap').hidden=opening||direction==='expense'; $('editObligationWrap').hidden=direction!=='expense'||!['business_operating','inventory','business_debt','personal_withdrawal'].includes(nature); $('editDebtWrap').hidden=opening||direction!=='expense'||!['business_debt','personal_withdrawal'].includes(nature);
+  if(t.category_id!=null && [...$('editCategory').options].some(o=>Number(o.value)===Number(t.category_id)))$('editCategory').value=String(t.category_id);
+  if(t.obligation_id!=null && [...$('editObligation').options].some(o=>Number(o.value)===Number(t.obligation_id)))$('editObligation').value=String(t.obligation_id);
+  if(t.debt_id!=null && [...$('editDebt').options].some(o=>Number(o.value)===Number(t.debt_id)))$('editDebt').value=String(t.debt_id);
+  if(t.source_account_id!=null)$('editSourceAccount').value=String(t.source_account_id); if(t.destination_account_id!=null)$('editDestinationAccount').value=String(t.destination_account_id);
+  $('voidTransactionBtn').textContent='Cancelar lançamento';
+}
+
+async function saveTransactionEdit(e){
+  e.preventDefault();
+  const id=Number($('editTransactionId').value); const current=state.transactions.find(x=>Number(x.id)===id); if(!current)return;
+  try{
+    const opening=Boolean(Number(current.opening_history)),direction=$('editDirection').value,nature=$('editNature').value;
+    const editDate=$('editDate').value; if(!editDate)throw new Error('Informe a data.');
+    const payload={occurred_at:`${editDate}T16:00:00.000Z`, direction, amount_cents:parseMoney($('editAmount').value), description:$('editDescription').value.trim(), nature, category_id:numOrNull($('editCategory').value), obligation_id:direction==='expense'?numOrNull($('editObligation').value):null, debt_id:!opening&&direction==='expense'?numOrNull($('editDebt').value):null, source_account_id:!opening&&direction!=='income'?numOrNull($('editSourceAccount').value):null, destination_account_id:!opening&&direction!=='expense'?numOrNull($('editDestinationAccount').value):null, payment_method:$('editPaymentMethod').value, notes:$('editNotes').value.trim()||null};
+    await api(`/api/transactions/${id}`,{method:'PATCH',body:JSON.stringify(payload)}); $('editTransactionDialog').close(); toast('Lançamento corrigido. Saldos e relatórios recalculados.'); await loadAll();
+  }catch(err){toast(err.message);}
+}
+
+async function voidCurrentTransaction(){
+  const id=Number($('editTransactionId').value); const t=state.transactions.find(x=>Number(x.id)===id); if(!t)return;
+  if(!confirm(`Cancelar este lançamento?\n\n${t.description} · ${money(t.amount_cents)}\n\nEle deixará de afetar saldos e relatórios, mas continuará no histórico como CANCELADO.`))return;
+  try{await api(`/api/transactions/${id}`,{method:'DELETE'}); $('editTransactionDialog').close(); toast('Lançamento cancelado e cálculos atualizados.'); await loadAll();}catch(err){toast(err.message);}
 }
 
 async function savePurchase(e){
