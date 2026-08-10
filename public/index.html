@@ -103,7 +103,7 @@
             <option value="income">Receita</option>
             <option value="transfer">Transferência</option>
           </select>
-          <label>Categoria</label><select id="category"></select>
+          <div class="field-head"><label>Categoria</label><button type="button" id="manageCategoriesBtn" class="link-btn">+ cadastrar / editar</button></div><select id="category"></select>
 
           <div id="obligationWrap"><label>Conta/compromisso</label><select id="obligation"></select><small class="muted">Use para aluguel, funcionário, pensão ou compra a prazo cadastrada.</small></div>
           <div id="debtWrap" hidden><label>Dívida</label><select id="debt"></select><small class="muted">Use aqui para Chico ou outra dívida antiga.</small></div>
@@ -117,8 +117,11 @@
           <button class="btn primary" type="submit">Salvar lançamento</button>
         </form>
 
-        <div class="section-title"><h2>Compra por fornecedor</h2><p>Use para toda compra nova. À vista ou a prazo.</p></div>
+        <div class="section-title"><h2>Compra por fornecedor</h2><p>Mercadoria, insumo ou despesa operacional comprada de fornecedor. À vista ou a prazo.</p></div>
         <form id="purchaseForm" class="form-card">
+          <label>Tipo da compra</label>
+          <select id="purchaseNature"><option value="inventory">Mercadoria / estoque / insumo</option><option value="business_operating">Despesa da operação da loja</option></select>
+          <div class="field-head"><label>Categoria</label><button type="button" id="managePurchaseCategoriesBtn" class="link-btn">+ cadastrar / editar</button></div><select id="purchaseCategory"></select>
           <label>Fornecedor cadastrado</label><select id="purchaseSupplier"></select>
           <label>Ou novo fornecedor</label><input id="purchaseSupplierNew" placeholder="Nome do fornecedor" />
           <label>Valor total da compra</label><input id="purchaseTotal" inputmode="decimal" placeholder="0,00" required />
@@ -154,7 +157,7 @@
             <option value="business_debt">Empresa · dívida paga</option>
             <option value="income">Receita / faturamento</option>
           </select>
-          <label>Categoria</label><select id="openingCategory"></select>
+          <div class="field-head"><label>Categoria</label><button type="button" id="manageOpeningCategoriesBtn" class="link-btn">+ cadastrar / editar</button></div><select id="openingCategory"></select>
           <div id="openingObligationWrap"><label>Conta/compromisso (opcional)</label><select id="openingObligation"></select><small class="muted">Vincule se for Canva, ChatGPT, aluguel, funcionário etc. Assim a conta fica marcada como paga no mês.</small></div>
           <label>Forma (se lembrar)</label>
           <select id="openingPaymentMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra / não lembro</option></select>
@@ -194,6 +197,17 @@
       </section>
 
       <section id="view-relatorios" class="view">
+        <div class="analysis-shell">
+          <div class="section-title analysis-title"><h2>Análise do mês</h2><p>Entradas, saídas e para onde o dinheiro foi.</p></div>
+          <article class="analysis-card">
+            <div class="row top"><div><h3>Entradas e saídas</h3><span class="muted small">Fluxo informado no mês</span></div><div id="analysisNetBadge" class="analysis-badge">R$ 0,00</div></div>
+            <div class="flow-bars"><div class="flow-col"><div class="flow-bar income" id="incomeFlowBar"></div><span>Entradas</span><strong id="analysisIncome">R$ 0,00</strong></div><div class="flow-col"><div class="flow-bar expense" id="expenseFlowBar"></div><span>Saídas</span><strong id="analysisExpense">R$ 0,00</strong></div></div>
+          </article>
+          <article class="analysis-card top-gap">
+            <div class="row top"><div><h3>Saídas por categoria</h3><span class="muted small">Cada gasto identificado</span></div><strong id="categoryExpenseTotal">R$ 0,00</strong></div>
+            <div class="donut-layout"><div id="categoryDonut" class="category-donut"><div><span>Total no mês</span><strong id="categoryDonutTotal">R$ 0,00</strong></div></div><div id="categoryLegend" class="category-legend"></div></div>
+          </article>
+        </div>
         <div class="section-title"><h2>Resumo do mês</h2></div>
         <div class="grid two">
           <article class="metric"><span>Faturamento informado</span><strong id="monthIncomeReport">R$ 0,00</strong></article>
@@ -201,8 +215,10 @@
           <article class="metric"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.2.1</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.3.0</strong></article>
         </div>
+        <div class="section-title"><h2>Categorias</h2><p>Você pode criar categorias novas quando surgir qualquer tipo de gasto.</p></div>
+        <button id="manageCategoriesSummaryBtn" class="btn secondary">Gerenciar categorias e subcategorias</button>
         <div class="section-title"><h2>Compras recentes</h2></div><div id="purchasesList" class="stack"></div>
         <div class="section-title"><h2>Últimos lançamentos</h2></div><div id="transactionsList" class="stack"></div>
         <button id="logoutBtn" class="btn danger-outline">Sair do aplicativo</button>
@@ -247,6 +263,29 @@
         <div class="dialog-actions"><button type="button" id="voidTransactionBtn" class="btn danger-outline compact-danger">Cancelar lançamento</button><button type="submit" class="btn primary">Salvar alterações</button></div>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="categoryDialog" class="wide-dialog">
+    <div class="dialog-head"><strong>Categorias do financeiro</strong><button type="button" id="closeCategoryDialog">×</button></div>
+    <div class="dialog-body">
+      <div class="notice"><b>Não ficou preso à lista do sistema.</b> Crie uma categoria sempre que surgir um gasto novo. Categorias usadas em histórico não são apagadas: podem ser desativadas.</div>
+      <form id="categoryForm" class="form-card compact-form top-gap">
+        <input type="hidden" id="categoryEditId" />
+        <label>Nome da categoria</label><input id="categoryName" placeholder="Ex.: Água mineral da loja" required />
+        <label>Grupo</label>
+        <select id="categoryNature">
+          <option value="business_operating">Empresa · operação</option>
+          <option value="inventory">Empresa · compras/estoque</option>
+          <option value="business_debt">Empresa · dívidas</option>
+          <option value="personal_withdrawal">Pessoal</option>
+          <option value="income">Receitas</option>
+        </select>
+        <label>Categoria principal (opcional)</label><select id="categoryParent"><option value="">Nenhuma</option></select>
+        <div class="dialog-actions"><button type="button" id="cancelCategoryEdit" class="btn secondary" hidden>Cancelar edição</button><button type="submit" class="btn primary">Salvar categoria</button></div>
+      </form>
+      <div class="section-title"><h2>Cadastradas</h2><p>Edite o nome ou desative o que não usa mais.</p></div>
+      <div id="categoryManagerList" class="stack"></div>
+    </div>
   </dialog>
 
   <dialog id="protectionDialog"><div class="dialog-head"><strong>Cálculo da proteção diária</strong><button id="closeProtection">×</button></div><div id="protectionItems" class="stack"></div></dialog>

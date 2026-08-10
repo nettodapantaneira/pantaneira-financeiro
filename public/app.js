@@ -22,16 +22,18 @@ function bindEvents(){
   $('showProtectionBtn').addEventListener('click',()=>$('protectionDialog').showModal()); $('closeProtection').addEventListener('click',()=>$('protectionDialog').close());
   document.querySelectorAll('#directionSelector button').forEach(b=>b.addEventListener('click',()=>setDirection(b.dataset.value))); document.querySelectorAll('#openingDirectionSelector button').forEach(b=>b.addEventListener('click',()=>setOpeningDirection(b.dataset.value)));
   $('nature').addEventListener('change',renderSelectors); $('openingNature').addEventListener('change',renderOpeningSelectors); $('amount').addEventListener('input',renderWithdrawalPreview); $('obligation').addEventListener('change',renderWithdrawalPreview);
-  $('purchaseTotal').addEventListener('input',renderPurchaseSummary); $('purchasePaidNow').addEventListener('input',renderPurchaseSummary);
+  $('purchaseTotal').addEventListener('input',renderPurchaseSummary); $('purchasePaidNow').addEventListener('input',renderPurchaseSummary); $('purchaseNature').addEventListener('change',renderPurchaseCategory);
   $('newObligationBtn').addEventListener('click',createObligation); $('newDebtBtn').addEventListener('click',createDebt);
   $('closeEditTransaction').addEventListener('click',()=>$('editTransactionDialog').close()); $('editTransactionForm').addEventListener('submit',saveTransactionEdit); $('voidTransactionBtn').addEventListener('click',voidCurrentTransaction);
   $('editDirection').addEventListener('change',renderEditSelectors); $('editNature').addEventListener('change',renderEditSelectors);
+  $('manageCategoriesBtn').addEventListener('click',openCategoryManager); $('manageOpeningCategoriesBtn').addEventListener('click',openCategoryManager); $('managePurchaseCategoriesBtn').addEventListener('click',openCategoryManager); $('manageCategoriesSummaryBtn').addEventListener('click',openCategoryManager);
+  $('closeCategoryDialog').addEventListener('click',()=>$('categoryDialog').close()); $('categoryForm').addEventListener('submit',saveCategory); $('categoryNature').addEventListener('change',renderCategoryParentOptions); $('cancelCategoryEdit').addEventListener('click',resetCategoryForm);
 }
 
 async function loadAll(){
   try{
     const [dashboard,accounts,categories,obligations,debts,transactions,suppliers,purchases]=await Promise.all([
-      api('/api/dashboard'),api('/api/accounts'),api('/api/categories'),api('/api/obligations'),api('/api/debts'),api('/api/transactions?limit=120'),api('/api/suppliers'),api('/api/purchases')
+      api('/api/dashboard'),api('/api/accounts'),api('/api/categories?all=1'),api('/api/obligations'),api('/api/debts'),api('/api/transactions?limit=120'),api('/api/suppliers'),api('/api/purchases')
     ]);
     Object.assign(state,{dashboard,accounts:accounts.accounts,categories:categories.categories,obligations:obligations.obligations,debts:debts.debts,transactions:transactions.transactions,suppliers:suppliers.suppliers,purchases:purchases.purchases});
     renderAll();
@@ -47,7 +49,7 @@ function renderAll(){
   $('monthIncome').textContent=money(d.month.income_cents); $('monthExpense').textContent=money(d.month.expense_cents); $('monthNet').textContent=money(d.month.net_cents); $('monthNet').classList.toggle('negative',d.month.net_cents<0); $('monthNet').classList.toggle('positive',d.month.net_cents>=0);
   $('monthIncomeReport').textContent=money(d.month.income_cents); $('monthExpenseReport').textContent=money(d.month.expense_cents);
   $('monthPersonal').textContent=money(d.month.personal_withdrawal_cents); $('monthInventory').textContent=money(d.month.inventory_spent_cents); $('monthDebt').textContent=money(d.month.debt_paid_cents); $('monthDebtReport').textContent=money(d.month.debt_paid_cents); $('oldDebtBalance').textContent=money(d.debt_summary.old_business_balance_cents);
-  renderPersonal(); renderObligations(); renderDebts(); renderTransactions(); renderOpeningTransactions(); renderAccounts(); renderProtection(); renderSelectors(); renderOpeningSelectors(); renderPurchases(); renderPurchaseSummary();
+  renderPersonal(); renderObligations(); renderDebts(); renderTransactions(); renderOpeningTransactions(); renderAccounts(); renderProtection(); renderSelectors(); renderOpeningSelectors(); renderPurchases(); renderPurchaseCategory(); renderPurchaseSummary(); renderAnalysisDashboard();
 }
 
 function renderPersonal(){
@@ -111,7 +113,7 @@ function renderAccounts(){
 }
 
 function renderPurchases(){
-  $('purchasesList').innerHTML=state.purchases.slice(0,15).map(p=>`<article class="list-card"><div class="row top"><div><h3>${esc(p.supplier_name)}</h3><p>${dateBR(p.purchase_date)} · ${p.status==='paid'?'paga':p.status==='partial'?'parcial':'a pagar'}${p.due_date?` · vence ${dateBR(p.due_date)}`:''}</p></div><div class="money">${money(p.total_cents)}</div></div><div class="subline"><span>Pago na compra ${money(p.paid_now_cents)}${Number(p.later_paid_cents)>0?` + depois ${money(p.later_paid_cents)}`:''}</span><span>A prazo ${money(p.payable_cents)}</span></div></article>`).join('')||empty('Nenhuma compra registrada neste mês.');
+  $('purchasesList').innerHTML=state.purchases.slice(0,15).map(p=>`<article class="list-card"><div class="row top"><div><h3>${esc(p.supplier_name)}</h3><p>${dateBR(p.purchase_date)} · ${esc(p.category_name||'Sem categoria')} · ${p.status==='paid'?'paga':p.status==='partial'?'parcial':'a pagar'}${p.due_date?` · vence ${dateBR(p.due_date)}`:''}</p></div><div class="money">${money(p.total_cents)}</div></div><div class="subline"><span>Pago na compra ${money(p.paid_now_cents)}${Number(p.later_paid_cents)>0?` + depois ${money(p.later_paid_cents)}`:''}</span><span>A prazo ${money(p.payable_cents)}</span></div></article>`).join('')||empty('Nenhuma compra registrada neste mês.');
 }
 
 function renderProtection(){
@@ -128,11 +130,14 @@ function renderSelectors(){
   renderWithdrawalPreview();
 }
 
-function renderCategorySelect(nature){const cats=state.categories.filter(c=>c.nature===nature);$('category').innerHTML=`<option value="">${cats.length?'Selecione':'Sem categoria'}</option>`+cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');}
+function categoryLabel(c){return c.parent_name?`${c.parent_name} › ${c.name}`:c.name;}
+function activeCategories(nature){return state.categories.filter(c=>Number(c.active)!==0&&c.nature===nature);}
+function renderCategorySelect(nature){const cats=activeCategories(nature);$('category').innerHTML=`<option value="">${cats.length?'Selecione':'Sem categoria'}</option>`+cats.map(c=>`<option value="${c.id}">${esc(categoryLabel(c))}</option>`).join('');}
 function renderObligationSelect(nature){const opts=state.obligations.filter(o=>o.active&&o.nature===nature);$('obligation').innerHTML='<option value="">Nenhum / não se aplica</option>'+opts.map(o=>`<option value="${o.id}">${esc(o.name)} · falta ${money(o.remaining_cents)}</option>`).join('');}
 function renderDebtSelect(nature){const scope=nature==='personal_withdrawal'?'personal':'business';const opts=state.debts.filter(d=>d.status==='active'&&d.scope===scope);$('debt').innerHTML='<option value="">Nenhuma / não se aplica</option>'+opts.map(d=>`<option value="${d.id}">${esc(d.name)}${d.current_balance_cents!=null?` · ${money(d.current_balance_cents)}`:''}</option>`).join('');}
 function renderSupplierSelect(){const opts='<option value="">Nenhum</option>'+state.suppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');$('supplier').innerHTML=opts;$('purchaseSupplier').innerHTML='<option value="">Selecione ou cadastre abaixo</option>'+state.suppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');}
 function renderAccountSelects(){const opts=state.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} · ${money(a.balance_cents)}</option>`).join('');$('sourceAccount').innerHTML=opts;$('destinationAccount').innerHTML=opts;$('purchaseSource').innerHTML=opts;}
+function renderPurchaseCategory(){const nature=$('purchaseNature').value;const cats=activeCategories(nature);$('purchaseCategory').innerHTML='<option value="">Selecione</option>'+cats.map(c=>`<option value="${c.id}">${esc(categoryLabel(c))}</option>`).join('');}
 
 function setOpeningDirection(v){
   $('openingDirection').value=v; document.querySelectorAll('#openingDirectionSelector button').forEach(b=>b.classList.toggle('selected',b.dataset.value===v));
@@ -143,7 +148,7 @@ function renderOpeningSelectors(){
   const direction=$('openingDirection').value; let nature=$('openingNature').value;
   if(direction==='income'){nature='income';$('openingNature').value='income';}
   $('openingNature').disabled=direction==='income';
-  const cats=state.categories.filter(c=>c.nature===nature); $('openingCategory').innerHTML=`<option value="">${cats.length?'Selecione':'Sem categoria'}</option>`+cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  const cats=activeCategories(nature); $('openingCategory').innerHTML=`<option value="">${cats.length?'Selecione':'Sem categoria'}</option>`+cats.map(c=>`<option value="${c.id}">${esc(categoryLabel(c))}</option>`).join('');
   const obligations=direction==='expense'?state.obligations.filter(o=>o.active&&o.nature===nature):[]; $('openingObligation').innerHTML='<option value="">Nenhum / não se aplica</option>'+obligations.map(o=>`<option value="${o.id}">${esc(o.name)} · falta ${money(o.remaining_cents)}</option>`).join('');
   $('openingObligationWrap').hidden=direction!=='expense';
 }
@@ -153,7 +158,8 @@ async function saveOpeningHistory(e){
   try{
     const direction=$('openingDirection').value,nature=$('openingNature').value,amount=parseMoney($('openingAmount').value),date=$('openingDate').value;
     if(!date||date<'2026-08-01'||date>'2026-08-10')throw new Error('A data desta aba deve estar entre 01/08 e 10/08/2026.');
-    const payload={direction,amount_cents:amount,description:$('openingDescription').value.trim(),nature,category_id:numOrNull($('openingCategory').value),obligation_id:direction==='expense'?numOrNull($('openingObligation').value):null,paid_date:date,payment_method:$('openingPaymentMethod').value,notes:$('openingNotes').value.trim()||null};
+    const openingCategoryId=numOrNull($('openingCategory').value); if(!openingCategoryId)throw new Error('Escolha ou cadastre uma categoria.');
+    const payload={direction,amount_cents:amount,description:$('openingDescription').value.trim(),nature,category_id:openingCategoryId,obligation_id:direction==='expense'?numOrNull($('openingObligation').value):null,paid_date:date,payment_method:$('openingPaymentMethod').value,notes:$('openingNotes').value.trim()||null};
     await api('/api/opening-history',{method:'POST',body:JSON.stringify(payload)}); toast('Histórico salvo sem alterar Mercado Pago, Nubank ou dinheiro atual.'); $('openingHistoryForm').reset(); $('openingDate').value='2026-08-10'; setOpeningDirection('expense'); await loadAll(); showView('antes');
   }catch(err){toast(err.message);}
 }
@@ -170,7 +176,8 @@ async function saveTransaction(e){
       if(free-amount<0)msgs.push(`Depois da retirada, o caixa livre ficará em ${money(free-amount)}.`);
       if(msgs.length&&!confirm(`${msgs.join('\n')}\n\nA retirada é necessária? Clique OK para registrar mesmo assim.`))return;
     }
-    const payload={direction,amount_cents:amount,description:$('description').value.trim(),nature,category_id:numOrNull($('category').value),obligation_id:numOrNull($('obligation').value),debt_id:numOrNull($('debt').value),supplier_id:numOrNull($('supplier').value),source_account_id:direction==='income'?null:numOrNull($('sourceAccount').value),destination_account_id:direction==='expense'?null:numOrNull($('destinationAccount').value),payment_method:$('paymentMethod').value,notes:$('notes').value.trim()||null};
+    const categoryId=direction==='transfer'?null:numOrNull($('category').value); if(direction!=='transfer'&&!categoryId)throw new Error('Escolha ou cadastre uma categoria.');
+    const payload={direction,amount_cents:amount,description:$('description').value.trim(),nature,category_id:categoryId,obligation_id:numOrNull($('obligation').value),debt_id:numOrNull($('debt').value),supplier_id:numOrNull($('supplier').value),source_account_id:direction==='income'?null:numOrNull($('sourceAccount').value),destination_account_id:direction==='expense'?null:numOrNull($('destinationAccount').value),payment_method:$('paymentMethod').value,notes:$('notes').value.trim()||null};
     const result=await api('/api/transactions',{method:'POST',body:JSON.stringify(payload)}); toast(result.warnings?.length?`Salvo. ${result.warnings.join(' ')}`:'Lançamento salvo.'); $('transactionForm').reset(); setDirection('expense'); await loadAll(); showView('hoje');
   }catch(err){toast(err.message);}
 }
@@ -197,7 +204,7 @@ function renderEditSelectors(selected=null){
   if(direction==='income'){nature='income';$('editNature').value='income';} else if(direction==='transfer'){nature='transfer';$('editNature').value='transfer';} else if(['income','transfer','unidentified'].includes(nature)){nature='business_operating';$('editNature').value=nature;}
   if(opening&&direction==='transfer'){direction='expense';$('editDirection').value='expense';nature='business_operating';$('editNature').value=nature;}
   $('editNature').disabled=direction!=='expense';
-  const cats=state.categories.filter(c=>c.nature===nature); $('editCategory').innerHTML='<option value="">Sem categoria</option>'+cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  const cats=activeCategories(nature); $('editCategory').innerHTML='<option value="">Sem categoria</option>'+cats.map(c=>`<option value="${c.id}">${esc(categoryLabel(c))}</option>`).join('');
   const obs=state.obligations.filter(o=>o.active&&o.nature===nature); $('editObligation').innerHTML='<option value="">Nenhum / não se aplica</option>'+obs.map(o=>`<option value="${o.id}">${esc(o.name)} · falta ${money(o.remaining_cents)}</option>`).join('');
   const debtScope=nature==='personal_withdrawal'?'personal':'business'; const debts=state.debts.filter(d=>d.scope===debtScope&&(d.status==='active'||Number(d.id)===Number(t.debt_id))); $('editDebt').innerHTML='<option value="">Nenhuma / não se aplica</option>'+debts.map(d=>`<option value="${d.id}">${esc(d.name)}${d.current_balance_cents!=null?` · ${money(d.current_balance_cents)}`:''}</option>`).join('');
   const accounts=state.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} · ${money(a.balance_cents)}</option>`).join(''); $('editSourceAccount').innerHTML=accounts; $('editDestinationAccount').innerHTML=accounts;
@@ -231,7 +238,8 @@ async function savePurchase(e){
   try{
     const total=parseMoney($('purchaseTotal').value),paid=parseMoney($('purchasePaidNow').value); if(paid>total)throw new Error('O valor pago agora não pode ser maior que a compra.'); const payable=total-paid;
     const supplierId=numOrNull($('purchaseSupplier').value),supplierName=$('purchaseSupplierNew').value.trim(); if(!supplierId&&!supplierName)throw new Error('Informe o fornecedor.'); if(payable>0&&!$('purchaseDueDate').value)throw new Error('Informe o vencimento do valor que ficará a pagar.');
-    const payload={supplier_id:supplierId,supplier_name:supplierName||null,total_cents:total,paid_now_cents:paid,source_account_id:paid>0?numOrNull($('purchaseSource').value):null,payment_method:paid>0?$('purchaseMethod').value:null,due_date:payable>0?$('purchaseDueDate').value:null,notes:$('purchaseNotes').value.trim()||null};
+    const purchaseCategoryId=numOrNull($('purchaseCategory').value); if(!purchaseCategoryId)throw new Error('Escolha ou cadastre a categoria da compra.');
+    const payload={nature:$('purchaseNature').value,category_id:purchaseCategoryId,supplier_id:supplierId,supplier_name:supplierName||null,total_cents:total,paid_now_cents:paid,source_account_id:paid>0?numOrNull($('purchaseSource').value):null,payment_method:paid>0?$('purchaseMethod').value:null,due_date:payable>0?$('purchaseDueDate').value:null,notes:$('purchaseNotes').value.trim()||null};
     await api('/api/purchases',{method:'POST',body:JSON.stringify(payload)}); toast(payable>0?`Compra salva. ${money(payable)} virou conta a pagar.`:'Compra à vista salva.'); $('purchaseForm').reset(); await loadAll(); showView('hoje');
   }catch(err){toast(err.message);}
 }
@@ -267,6 +275,37 @@ async function createObligation(){const name=prompt('Nome da conta/compromisso')
 async function editDebt(id){const d=state.debts.find(x=>x.id===id);if(!d)return;const value=prompt(`Saldo atual de ${d.name}`,d.current_balance_cents==null?'':centsToInput(d.current_balance_cents));if(value==null)return;try{await api(`/api/debts/${id}`,{method:'PATCH',body:JSON.stringify({current_balance_cents:value.trim()?parseMoney(value):null})});toast('Saldo da dívida atualizado.');await loadAll();}catch(err){toast(err.message);}}
 async function createDebt(){const name=prompt('Nome da dívida antiga / credor');if(!name)return;const value=prompt('Saldo atual conhecido (pode deixar vazio)','');const personal=confirm('Essa dívida é pessoal? OK = pessoal / Cancelar = empresa');try{await api('/api/debts',{method:'POST',body:JSON.stringify({name,creditor:name,scope:personal?'personal':'business',current_balance_cents:value.trim()?parseMoney(value):null,debt_kind:personal?'personal_agreement':'old',flexible:true})});toast('Dívida antiga cadastrada.');await loadAll();}catch(err){toast(err.message);}}
 async function adjustOpening(id){const a=state.accounts.find(x=>x.id===id);if(!a)return;const value=prompt(`Saldo inicial de ${a.name}. Use apenas para corrigir a fotografia inicial.`,centsToInput(a.opening_balance_cents));if(value==null)return;try{await api(`/api/accounts/${id}/opening-balance`,{method:'POST',body:JSON.stringify({opening_balance_cents:parseMoney(value)})});toast('Saldo inicial atualizado.');await loadAll();}catch(err){toast(err.message);}}
+
+function natureGroupLabel(n){return ({business_operating:'Empresa · operação',inventory:'Empresa · compras/estoque',business_debt:'Empresa · dívidas',personal_withdrawal:'Pessoal',income:'Receitas'})[n]||labelNature(n);}
+
+function openCategoryManager(){resetCategoryForm();renderCategoryManager();$('categoryDialog').showModal();}
+function resetCategoryForm(){
+  $('categoryEditId').value=''; $('categoryName').value=''; $('categoryNature').disabled=false; $('categoryNature').value=$('nature')?.value&&['business_operating','inventory','business_debt','personal_withdrawal','income'].includes($('nature').value)?$('nature').value:'business_operating'; $('cancelCategoryEdit').hidden=true; renderCategoryParentOptions();
+}
+function renderCategoryParentOptions(selectedId=null){
+  const nature=$('categoryNature').value,id=Number($('categoryEditId').value||0); const parents=state.categories.filter(c=>Number(c.active)!==0&&c.nature===nature&&!c.parent_id&&Number(c.id)!==id);
+  $('categoryParent').innerHTML='<option value="">Nenhuma</option>'+parents.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join(''); if(selectedId)$('categoryParent').value=String(selectedId);
+}
+function renderCategoryManager(){
+  const groups=['business_operating','inventory','business_debt','personal_withdrawal','income'];
+  $('categoryManagerList').innerHTML=groups.map(n=>{
+    const items=state.categories.filter(c=>c.nature===n).sort((a,b)=>categoryLabel(a).localeCompare(categoryLabel(b),'pt-BR'));
+    if(!items.length)return '';
+    return `<div class="category-group"><h3>${esc(natureGroupLabel(n))}</h3>${items.map(c=>`<article class="category-row ${Number(c.active)===0?'inactive':''}"><div><strong>${esc(categoryLabel(c))}</strong>${Number(c.active)===0?'<small>Desativada</small>':''}</div><div class="category-actions"><button class="mini-btn" data-edit-category="${c.id}">Editar</button><button class="mini-btn" data-toggle-category="${c.id}">${Number(c.active)===0?'Reativar':'Desativar'}</button></div></article>`).join('')}</div>`;
+  }).join('');
+  document.querySelectorAll('[data-edit-category]').forEach(b=>b.addEventListener('click',()=>startCategoryEdit(Number(b.dataset.editCategory))));
+  document.querySelectorAll('[data-toggle-category]').forEach(b=>b.addEventListener('click',()=>toggleCategory(Number(b.dataset.toggleCategory))));
+}
+function startCategoryEdit(id){const c=state.categories.find(x=>Number(x.id)===id);if(!c)return;$('categoryEditId').value=String(c.id);$('categoryName').value=c.name;$('categoryNature').value=c.nature;$('categoryNature').disabled=true;$('cancelCategoryEdit').hidden=false;renderCategoryParentOptions(c.parent_id);$('categoryName').focus();}
+async function saveCategory(e){
+  e.preventDefault(); try{const id=Number($('categoryEditId').value||0);const payload={name:$('categoryName').value.trim(),nature:$('categoryNature').value,parent_id:numOrNull($('categoryParent').value)}; if(id)await api(`/api/categories/${id}`,{method:'PATCH',body:JSON.stringify({name:payload.name,parent_id:payload.parent_id})}); else await api('/api/categories',{method:'POST',body:JSON.stringify(payload)}); toast(id?'Categoria atualizada.':'Categoria criada.'); await loadAll(); resetCategoryForm(); renderCategoryManager();}catch(err){toast(err.message);}
+}
+async function toggleCategory(id){const c=state.categories.find(x=>Number(x.id)===id);if(!c)return;const active=Number(c.active)===0;if(!active&&!confirm(`Desativar a categoria “${c.name}”?\n\nOs lançamentos antigos continuam preservados.`))return;try{await api(`/api/categories/${id}`,{method:'PATCH',body:JSON.stringify({active})});toast(active?'Categoria reativada.':'Categoria desativada.');await loadAll();renderCategoryManager();}catch(err){toast(err.message);}}
+
+function renderAnalysisDashboard(){
+  const d=state.dashboard;if(!d)return; const inc=Number(d.month.income_cents||0),exp=Number(d.month.expense_cents||0),max=Math.max(inc,exp,1); $('analysisIncome').textContent=money(inc);$('analysisExpense').textContent=money(exp);$('analysisNetBadge').textContent=`${d.month.net_cents>=0?'+ ':''}${money(d.month.net_cents)}`;$('analysisNetBadge').classList.toggle('negative',d.month.net_cents<0);$('incomeFlowBar').style.height=`${Math.max(10,Math.round(110*inc/max))}px`;$('expenseFlowBar').style.height=`${Math.max(10,Math.round(110*exp/max))}px`;
+  const items=(d.category_spending||[]).filter(x=>Number(x.total_cents)>0);const total=items.reduce((a,x)=>a+Number(x.total_cents||0),0);$('categoryExpenseTotal').textContent=money(total);$('categoryDonutTotal').textContent=money(total);const top=items.slice(0,7);const colors=['#4A4EE8','#3C7F86','#51327F','#D57724','#D348B9','#31515A','#8B95A7'];let angle=0,parts=[];top.forEach((x,i)=>{const share=total?Number(x.total_cents)/total:0;const end=angle+share*360;parts.push(`${colors[i%colors.length]} ${angle}deg ${end}deg`);angle=end;});if(angle<360)parts.push(`#EEF1F6 ${angle}deg 360deg`);$('categoryDonut').style.background=parts.length?`conic-gradient(${parts.join(',')})`:'#EEF1F6';$('categoryLegend').innerHTML=top.map((x,i)=>`<div class="legend-row"><span class="legend-dot" style="background:${colors[i%colors.length]}"></span><div><strong>${esc(x.parent_name?`${x.parent_name} › ${x.name}`:x.name)}</strong><small>${money(x.total_cents)} · ${total?Math.round(Number(x.total_cents)/total*100):0}%</small></div></div>`).join('')||'<p class="muted">Ainda não há saídas categorizadas no mês.</p>';
+}
 
 function showView(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===name));window.scrollTo({top:0,behavior:'smooth'});}
 async function logout(){await api('/api/auth/logout',{method:'POST'});location.reload();}

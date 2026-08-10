@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.2.0" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.3.0" });
       }
 
       if (url.pathname === "/api/auth/status" && request.method === "GET") {
@@ -35,7 +35,36 @@ export default {
 
       if (url.pathname === "/api/dashboard" && request.method === "GET") return json(await buildDashboard(env.DB));
       if (url.pathname === "/api/accounts" && request.method === "GET") return json({accounts:await listAccountsWithBalances(env.DB)});
-      if (url.pathname === "/api/categories" && request.method === "GET") return json({categories:(await env.DB.prepare("SELECT id,name,nature,parent_id FROM categories WHERE active=1 ORDER BY nature,name").all()).results});
+      if (url.pathname === "/api/categories" && request.method === "GET") {
+        const includeInactive=url.searchParams.get("all")==="1";
+        const sql=`SELECT c.id,c.name,c.nature,c.parent_id,c.active,p.name parent_name
+          FROM categories c LEFT JOIN categories p ON p.id=c.parent_id
+          ${includeInactive?"":"WHERE c.active=1"}
+          ORDER BY c.nature,COALESCE(p.name,c.name),CASE WHEN c.parent_id IS NULL THEN 0 ELSE 1 END,c.name`;
+        return json({categories:(await env.DB.prepare(sql).all()).results});
+      }
+      if (url.pathname === "/api/categories" && request.method === "POST") {
+        const body=await readJson(request); const name=String(body.name||"").trim(); const nature=String(body.nature||"");
+        if(!name)return json({error:"Nome da categoria obrigatório."},400);
+        if(!ALLOWED_NATURES.includes(nature)||["transfer","unidentified"].includes(nature))return json({error:"Natureza de categoria inválida."},400);
+        let parentId=body.parent_id==null?null:toInteger(body.parent_id,"parent_id");
+        if(parentId){const parent=await env.DB.prepare("SELECT id,nature,active FROM categories WHERE id=?").bind(parentId).first();if(!parent||!Number(parent.active)||parent.nature!==nature)return json({error:"Categoria principal inválida ou de outra natureza."},400);}
+        try{
+          const r=await env.DB.prepare("INSERT INTO categories(name,nature,parent_id,active) VALUES(?,?,?,1)").bind(name,nature,parentId).run();
+          return json({ok:true,id:r.meta.last_row_id},201);
+        }catch(err){if(String(err?.message||err).toLowerCase().includes("unique"))return json({error:"Já existe uma categoria com esse nome nesta natureza."},409);throw err;}
+      }
+      const categoryMatch=url.pathname.match(/^\/api\/categories\/(\d+)$/);
+      if(categoryMatch && request.method==="PATCH"){
+        const id=Number(categoryMatch[1]); const body=await readJson(request); const current=await env.DB.prepare("SELECT * FROM categories WHERE id=?").bind(id).first(); if(!current)return json({error:"Categoria não encontrada."},404);
+        const name=body.name===undefined?current.name:String(body.name||"").trim(); if(!name)return json({error:"Nome obrigatório."},400);
+        const active=body.active===undefined?Number(current.active):(body.active?1:0);
+        let parentId=body.parent_id===undefined?current.parent_id:(body.parent_id==null?null:toInteger(body.parent_id,"parent_id"));
+        if(parentId===id)return json({error:"Uma categoria não pode ser filha dela mesma."},400);
+        if(parentId){const parent=await env.DB.prepare("SELECT id,nature,active FROM categories WHERE id=?").bind(parentId).first();if(!parent||!Number(parent.active)||parent.nature!==current.nature)return json({error:"Categoria principal inválida ou de outra natureza."},400);}
+        try{await env.DB.prepare("UPDATE categories SET name=?,parent_id=?,active=? WHERE id=?").bind(name,parentId,active,id).run();return json({ok:true});}
+        catch(err){if(String(err?.message||err).toLowerCase().includes("unique"))return json({error:"Já existe uma categoria com esse nome nesta natureza."},409);throw err;}
+      }
       if (url.pathname === "/api/obligations" && request.method === "GET") return json({obligations:await listObligations(env.DB)});
       if (url.pathname === "/api/debts" && request.method === "GET") return json({debts:await listDebts(env.DB)});
       if (url.pathname === "/api/transactions" && request.method === "GET") {
@@ -348,6 +377,12 @@ async function buildDashboard(db){
     COALESCE(SUM(CASE WHEN opening_history=1 AND direction='expense' AND status!='void' THEN amount_cents ELSE 0 END),0) opening_expense_cents
     FROM transactions WHERE occurred_at>=? AND occurred_at<?`).bind(monthStart,nextMonth).first();
 
+  const categorySpending=(await db.prepare(`SELECT c.id,c.name,c.nature,COALESCE(p.name,'') parent_name,SUM(t.amount_cents) total_cents
+    FROM transactions t JOIN categories c ON c.id=t.category_id LEFT JOIN categories p ON p.id=c.parent_id
+    WHERE t.occurred_at>=? AND t.occurred_at<? AND t.direction='expense' AND t.status!='void'
+    GROUP BY c.id,c.name,c.nature,p.name ORDER BY total_cents DESC,c.name`).bind(monthStart,nextMonth).all()).results
+    .map(r=>({...r,total_cents:Number(r.total_cents||0)}));
+
   const personalFixed=obligations.filter(o=>o.scope==="personal"&&Number(o.personal_ceiling_member||0)===1);
   const ceiling=personalFixed.reduce((s,o)=>s+Number(o.monthly_target_cents||0),0) || Number((await getSetting(db,"personal_fixed_ceiling_cents"))||291800);
   const personalUsed=Number(month?.personal_cents||0); const personalRemaining=Math.max(0,ceiling-personalUsed); const personalExceeded=Math.max(0,personalUsed-ceiling);
@@ -363,6 +398,7 @@ async function buildDashboard(db){
     daily_protection:daily,
     today:{income_cents:Number(today?.income_cents||0),expense_cents:Number(today?.expense_cents||0),personal_withdrawal_cents:Number(today?.personal_cents||0)},
     month:{income_cents:Number(month?.income_cents||0),expense_cents:Number(month?.expense_cents||0),net_cents:Number(month?.income_cents||0)-Number(month?.expense_cents||0),opening_income_cents:Number(month?.opening_income_cents||0),opening_expense_cents:Number(month?.opening_expense_cents||0),personal_withdrawal_cents:personalUsed,debt_paid_cents:Number(month?.debt_paid_cents||0),inventory_spent_cents:Number(month?.inventory_cents||0)},
+    category_spending:categorySpending,
     personal:{ceiling_cents:ceiling,withdrawn_cents:personalUsed,ceiling_remaining_cents:personalRemaining,ceiling_exceeded_cents:personalExceeded,pension:pension?{target_cents:Number(pension.monthly_target_cents||0),paid_cents:Number(pension.paid_current_cents||0),remaining_cents:Math.max(0,Number(pension.monthly_target_cents||0)-Number(pension.paid_current_cents||0))}:null,fixed_items:personalFixed.map(o=>({id:o.id,name:o.name,target_cents:Number(o.monthly_target_cents||0),paid_cents:Number(o.paid_current_cents||0)}))},
     debt_summary:{old_business_balance_cents:oldDebtBalance,active_count:debts.filter(d=>d.status==="active").length},
     accounts,obligations:obligations.slice(0,50),recent_purchases:purchases
@@ -431,31 +467,31 @@ async function listSuppliers(db){
 }
 
 async function listPurchases(db,limit=100){
-  return (await db.prepare(`SELECT p.id,p.purchase_date,p.total_cents,p.paid_now_cents,p.payable_cents,p.due_date,p.status,p.payment_method,p.notes,s.name supplier_name,a.name source_account,
+  return (await db.prepare(`SELECT p.id,p.purchase_date,p.total_cents,p.paid_now_cents,p.payable_cents,p.due_date,p.status,p.payment_method,p.notes,p.nature,p.category_id,s.name supplier_name,a.name source_account,c.name category_name,
     COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.obligation_id=p.obligation_id AND t.direction='expense' AND t.status!='void'),0) later_paid_cents
-    FROM purchases p JOIN suppliers s ON s.id=p.supplier_id LEFT JOIN accounts a ON a.id=p.source_account_id ORDER BY p.purchase_date DESC,p.id DESC LIMIT ?`).bind(limit).all()).results;
+    FROM purchases p JOIN suppliers s ON s.id=p.supplier_id LEFT JOIN accounts a ON a.id=p.source_account_id LEFT JOIN categories c ON c.id=p.category_id ORDER BY p.purchase_date DESC,p.id DESC LIMIT ?`).bind(limit).all()).results;
 }
 
 async function createPurchase(db,body){
   const total=toPositiveInteger(body.total_cents,"total_cents"); const paidNow=toNonNegativeInteger(body.paid_now_cents??total,"paid_now_cents"); if(paidNow>total)throw new Error("Valor pago agora não pode ser maior que o total da compra.");
+  const nature=body.nature==="business_operating"?"business_operating":"inventory";
+  let categoryId=body.category_id==null?null:toInteger(body.category_id,"category_id"); categoryId=await validCategoryForNature(db,categoryId,nature);
   const payable=total-paidNow; const supplierId=await ensureSupplier(db,body); const supplier=await db.prepare("SELECT name FROM suppliers WHERE id=?").bind(supplierId).first();
   const source=paidNow>0?toInteger(body.source_account_id,"source_account_id"):null; const method=paidNow>0?normalizePaymentMethod(body.payment_method):null;
   const dueDate=payable>0?optionalIsoDate(body.due_date):null; if(payable>0&&!dueDate)throw new Error("Informe o vencimento da parte a pagar.");
   const purchaseDate=body.purchase_date?new Date(body.purchase_date).toISOString():new Date().toISOString();
-  const p=await db.prepare(`INSERT INTO purchases(supplier_id,purchase_date,total_cents,paid_now_cents,payable_cents,source_account_id,payment_method,due_date,status,notes) VALUES(?,?,?,?,?,?,?,?,?,?)`)
-    .bind(supplierId,purchaseDate,total,paidNow,payable,source,method,dueDate,payable>0?(paidNow>0?"partial":"open"):"paid",nullable(body.notes)).run();
+  const p=await db.prepare(`INSERT INTO purchases(supplier_id,purchase_date,total_cents,paid_now_cents,payable_cents,source_account_id,payment_method,due_date,status,notes,nature,category_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(supplierId,purchaseDate,total,paidNow,payable,source,method,dueDate,payable>0?(paidNow>0?"partial":"open"):"paid",nullable(body.notes),nature,categoryId).run();
   const purchaseId=p.meta.last_row_id; let transactionId=null,obligationId=null;
   if(paidNow>0){
-    const c=await db.prepare("SELECT id FROM categories WHERE name='Compras e estoque' AND nature='inventory' LIMIT 1").first();
     const tr=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,nature,category_id,description,notes,payment_method,recurrence_type,status,supplier_id,purchase_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(purchaseDate,periodKeyFromIso(purchaseDate),"expense",paidNow,source,"inventory",c?.id||null,`Compra - ${supplier?.name||"Fornecedor"}`,nullable(body.notes),method,"eventual","posted",supplierId,purchaseId).run();
+      .bind(purchaseDate,periodKeyFromIso(purchaseDate),"expense",paidNow,source,nature,categoryId,`Compra - ${supplier?.name||"Fornecedor"}`,nullable(body.notes),method,"eventual","posted",supplierId,purchaseId).run();
     transactionId=tr.meta.last_row_id;
   }
   if(payable>0){
-    const c=await db.prepare("SELECT id FROM categories WHERE name='Compras e estoque' AND nature='inventory' LIMIT 1").first();
     const dueDay=Number(String(dueDate).slice(8,10));
     const o=await db.prepare(`INSERT INTO obligations(name,scope,nature,category_id,monthly_target_cents,due_day,due_date,recurring,flexible,priority,counts_in_daily_target,personal_ceiling_member,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(`Compra a pagar - ${supplier?.name||"Fornecedor"}`,"business","inventory",c?.id||null,payable,dueDay,dueDate,0,0,2,1,0,`Gerado pela compra #${purchaseId}.`).run();
+      .bind(`Compra a pagar - ${supplier?.name||"Fornecedor"}`,"business",nature,categoryId,payable,dueDay,dueDate,0,0,2,1,0,`Gerado pela compra #${purchaseId}.`).run();
     obligationId=o.meta.last_row_id;
   }
   await db.prepare("UPDATE purchases SET transaction_id=?,obligation_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(transactionId,obligationId,purchaseId).run();
