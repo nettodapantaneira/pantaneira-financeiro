@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pantaneira-financeiro",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-10",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pantaneira-financeiro-db",
+      "database_id": "00000000-0000-0000-0000-000000000000", // SUBSTITUA pelo ID real criado no Cloudflare
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "APP_NAME": "Pantaneira Financeiro",
+    "APP_VERSION": "1.0.0"
+  }
+}

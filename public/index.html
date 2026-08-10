@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Pantaneira Financeiro</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="toast" class="toast" hidden></div>
+
+  <section id="loginView" class="login-shell" hidden>
+    <div class="login-card">
+      <div class="brand-mark">P</div>
+      <h1>Pantaneira Financeiro</h1>
+      <p>Controle do dinheiro real, reservas e retiradas pessoais.</p>
+      <form id="loginForm">
+        <label>Senha</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button class="btn primary" type="submit">Entrar</button>
+      </form>
+      <p id="loginHint" class="muted small"></p>
+    </div>
+  </section>
+
+  <div id="app" hidden>
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">PANTANEIRA</div>
+        <strong>Financeiro</strong>
+      </div>
+      <button id="refreshBtn" class="icon-btn" aria-label="Atualizar">↻</button>
+    </header>
+
+    <main>
+      <section id="view-hoje" class="view active">
+        <div class="hero-card">
+          <span>PODE USAR</span>
+          <strong id="freeMoney">R$ 0,00</strong>
+          <small>saldo empresarial menos compromissos rígidos ainda não reservados</small>
+        </div>
+
+        <div class="grid two">
+          <article class="metric"><span>Saldo empresa</span><strong id="businessBalance">R$ 0,00</strong></article>
+          <article class="metric"><span>Comprometido</span><strong id="committed">R$ 0,00</strong></article>
+        </div>
+
+        <article class="protect-card">
+          <div class="protect-head"><div><span>PRECISO PROTEGER HOJE</span><strong id="protectTotal">R$ 0,00</strong></div><button id="showProtectionBtn" class="link-btn">ver cálculo</button></div>
+          <div class="protect-grid">
+            <div><span>Empresa</span><b id="protectBusiness">R$ 0,00</b></div>
+            <div><span>Dívidas</span><b id="protectDebt">R$ 0,00</b></div>
+            <div><span>Pessoal</span><b id="protectPersonal">R$ 0,00</b></div>
+            <div><span>Flexível (incluído)</span><b id="protectFlexible">R$ 0,00</b></div>
+          </div>
+        </article>
+
+        <div class="grid two">
+          <article class="metric"><span>Entrou hoje</span><strong id="todayIncome">R$ 0,00</strong></article>
+          <article class="metric"><span>Saiu hoje</span><strong id="todayExpense">R$ 0,00</strong></article>
+          <article class="metric"><span>Retirada pessoal</span><strong id="todayPersonal">R$ 0,00</strong></article>
+          <article class="metric"><span>Dinheiro físico</span><strong id="cashBalance">R$ 0,00</strong></article>
+        </div>
+
+        <div class="section-title"><h2>Reservas prioritárias</h2></div>
+        <div id="obligationPreview" class="stack"></div>
+      </section>
+
+      <section id="view-lancar" class="view">
+        <div class="section-title"><h2>Novo lançamento</h2><p>Registre o gasto e também de onde o dinheiro saiu.</p></div>
+        <form id="transactionForm" class="form-card">
+          <div class="segmented" id="directionSelector">
+            <button type="button" data-value="expense" class="selected">Saída</button>
+            <button type="button" data-value="income">Entrada</button>
+            <button type="button" data-value="transfer">Transferência</button>
+          </div>
+          <input type="hidden" id="direction" value="expense" />
+
+          <label>Valor</label>
+          <input id="amount" inputmode="decimal" placeholder="0,00" required />
+
+          <label>Descrição</label>
+          <input id="description" placeholder="Ex.: gasolina ida Cuiabá" required />
+
+          <label>Natureza</label>
+          <select id="nature">
+            <option value="business_operating">Empresa · operação</option>
+            <option value="inventory">Empresa · compras/estoque</option>
+            <option value="business_debt">Empresa · dívida</option>
+            <option value="personal_withdrawal">Retirada pessoal</option>
+            <option value="income">Receita</option>
+            <option value="transfer">Transferência</option>
+          </select>
+
+          <label>Categoria</label>
+          <select id="category"></select>
+
+          <div id="obligationWrap">
+            <label>Qual conta/compromisso?</label>
+            <select id="obligation"></select>
+            <small class="muted">Opcional, mas use quando estiver pagando uma conta ou dívida cadastrada.</small>
+          </div>
+
+          <div id="sourceWrap">
+            <label>De onde saiu?</label>
+            <select id="sourceAccount"></select>
+          </div>
+
+          <div id="destinationWrap" hidden>
+            <label>Onde entrou?</label>
+            <select id="destinationAccount"></select>
+          </div>
+
+          <label>Forma</label>
+          <select id="paymentMethod">
+            <option value="pix">Pix</option>
+            <option value="cash">Dinheiro</option>
+            <option value="debit">Débito</option>
+            <option value="credit">Crédito</option>
+            <option value="transfer">Transferência</option>
+            <option value="boleto">Boleto</option>
+            <option value="other">Outra</option>
+          </select>
+
+          <label>Observação</label>
+          <textarea id="notes" rows="3" placeholder="Opcional"></textarea>
+
+          <button class="btn primary" type="submit">Salvar lançamento</button>
+        </form>
+      </section>
+
+      <section id="view-contas" class="view">
+        <div class="section-title"><h2>Contas e reservas</h2><p>Quanto já está protegido para cada compromisso.</p></div>
+        <button id="newObligationBtn" class="btn secondary">+ Cadastrar compromisso</button>
+        <div id="obligationsList" class="stack" style="margin-top:10px"></div>
+      </section>
+
+      <section id="view-dividas" class="view">
+        <div class="section-title"><h2>Dívidas</h2><p>Acompanhe o saldo e veja a redução acontecer.</p></div>
+        <button id="newDebtBtn" class="btn secondary">+ Cadastrar dívida</button>
+        <div id="debtsList" class="stack" style="margin-top:10px"></div>
+      </section>
+
+      <section id="view-caixa" class="view">
+        <div class="section-title"><h2>Dinheiro físico</h2><p>Conferência para encontrar saídas que ficaram sem registro.</p></div>
+        <article class="hero-card small-hero"><span>SALDO ESPERADO</span><strong id="cashExpected">R$ 0,00</strong></article>
+        <form id="cashForm" class="form-card">
+          <label>Quanto você contou agora?</label>
+          <input id="cashActual" inputmode="decimal" placeholder="0,00" required />
+          <button class="btn primary" type="submit">Conferir dinheiro</button>
+        </form>
+        <div id="cashResult" class="notice" hidden></div>
+        <div class="section-title"><h2>Saldos iniciais</h2><p>Informe uma vez os valores reais para começar.</p></div>
+        <div id="accountsSetup" class="stack"></div>
+      </section>
+
+      <section id="view-relatorios" class="view">
+        <div class="section-title"><h2>Resumo do mês</h2></div>
+        <div class="grid two">
+          <article class="metric"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong></article>
+          <article class="metric"><span>Dívidas pagas</span><strong id="monthDebt">R$ 0,00</strong></article>
+          <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.0.0</strong></article>
+        </div>
+        <div class="section-title"><h2>Últimos lançamentos</h2></div>
+        <div id="transactionsList" class="stack"></div>
+        <button id="logoutBtn" class="btn danger-outline">Sair do aplicativo</button>
+      </section>
+    </main>
+
+    <button id="fab" class="fab" aria-label="Novo lançamento">+</button>
+
+    <nav class="bottom-nav">
+      <button data-view="hoje" class="active"><span>⌂</span><small>Hoje</small></button>
+      <button data-view="lancar"><span>＋</span><small>Lançar</small></button>
+      <button data-view="contas"><span>▣</span><small>Contas</small></button>
+      <button data-view="dividas"><span>↘</span><small>Dívidas</small></button>
+      <button data-view="caixa"><span>R$</span><small>Caixa</small></button>
+      <button data-view="relatorios"><span>≡</span><small>Resumo</small></button>
+    </nav>
+  </div>
+
+  <dialog id="protectionDialog">
+    <div class="dialog-head"><strong>Cálculo da proteção diária</strong><button id="closeProtection">×</button></div>
+    <div id="protectionItems" class="stack"></div>
+  </dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
