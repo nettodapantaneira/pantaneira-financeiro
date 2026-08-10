@@ -12,7 +12,7 @@
     {
       "binding": "DB",
       "database_name": "pantaneira-financeiro-db",
-      "database_id": "00000000-0000-0000-0000-000000000000", // SUBSTITUA pelo ID real criado no Cloudflare
+      "database_id": "2ee0a624-9a37-4f55-be84-ab146ae9dae4",
       "migrations_dir": "migrations"
     }
   ],
