@@ -32,7 +32,7 @@ MVP financeiro independente para controle diário da Pantaneira.
 - Copie `.dev.vars.example` para `.dev.vars` e altere os valores.
 - `npm run db:migrate:local`
 - `npm run dev`
-
+Deploy inicial com migrations D1 configuradas.
 ## Regra de negócio central
 O saldo bancário não é o dinheiro livre. O app calcula o dinheiro livre descontando os compromissos rígidos ainda não reservados e calcula quanto precisa ser protegido por dia.
 
