@@ -18,10 +18,10 @@ $('loginForm').addEventListener('submit',async e=>{e.preventDefault();try{await 
 function bindEvents(){
   document.querySelectorAll('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
   $('fab').addEventListener('click',()=>showView('lancar')); $('refreshBtn').addEventListener('click',loadAll); $('logoutBtn').addEventListener('click',logout);
-  $('transactionForm').addEventListener('submit',saveTransaction); $('purchaseForm').addEventListener('submit',savePurchase); $('cashForm').addEventListener('submit',reconcileCash);
+  $('transactionForm').addEventListener('submit',saveTransaction); $('openingHistoryForm').addEventListener('submit',saveOpeningHistory); $('purchaseForm').addEventListener('submit',savePurchase); $('cashForm').addEventListener('submit',reconcileCash);
   $('showProtectionBtn').addEventListener('click',()=>$('protectionDialog').showModal()); $('closeProtection').addEventListener('click',()=>$('protectionDialog').close());
-  document.querySelectorAll('#directionSelector button').forEach(b=>b.addEventListener('click',()=>setDirection(b.dataset.value)));
-  $('nature').addEventListener('change',renderSelectors); $('amount').addEventListener('input',renderWithdrawalPreview); $('obligation').addEventListener('change',renderWithdrawalPreview);
+  document.querySelectorAll('#directionSelector button').forEach(b=>b.addEventListener('click',()=>setDirection(b.dataset.value))); document.querySelectorAll('#openingDirectionSelector button').forEach(b=>b.addEventListener('click',()=>setOpeningDirection(b.dataset.value)));
+  $('nature').addEventListener('change',renderSelectors); $('openingNature').addEventListener('change',renderOpeningSelectors); $('amount').addEventListener('input',renderWithdrawalPreview); $('obligation').addEventListener('change',renderWithdrawalPreview);
   $('purchaseTotal').addEventListener('input',renderPurchaseSummary); $('purchasePaidNow').addEventListener('input',renderPurchaseSummary);
   $('newObligationBtn').addEventListener('click',createObligation); $('newDebtBtn').addEventListener('click',createDebt);
 }
@@ -42,8 +42,10 @@ function renderAll(){
   $('businessBalance').textContent=money(d.balances.business_cents); $('pendingBalance').textContent=money(d.balances.pending_business_cents); $('businessTotal').textContent=money(d.balances.business_total_cents); $('committed').textContent=money(d.balances.committed_strict_cents);
   $('protectTotal').textContent=money(d.daily_protection.total_cents); $('protectBusiness').textContent=money(d.daily_protection.business_cents); $('protectDebt').textContent=money(d.daily_protection.debt_cents); $('protectInventory').textContent=money(d.daily_protection.inventory_cents);
   $('todayIncome').textContent=money(d.today.income_cents); $('todayExpense').textContent=money(d.today.expense_cents); $('todayPersonal').textContent=money(d.today.personal_withdrawal_cents); $('cashBalance').textContent=money(d.balances.cash_cents); $('cashExpected').textContent=money(d.balances.cash_cents);
+  $('monthIncome').textContent=money(d.month.income_cents); $('monthExpense').textContent=money(d.month.expense_cents); $('monthNet').textContent=money(d.month.net_cents); $('monthNet').classList.toggle('negative',d.month.net_cents<0); $('monthNet').classList.toggle('positive',d.month.net_cents>=0);
+  $('monthIncomeReport').textContent=money(d.month.income_cents); $('monthExpenseReport').textContent=money(d.month.expense_cents);
   $('monthPersonal').textContent=money(d.month.personal_withdrawal_cents); $('monthInventory').textContent=money(d.month.inventory_spent_cents); $('monthDebt').textContent=money(d.month.debt_paid_cents); $('monthDebtReport').textContent=money(d.month.debt_paid_cents); $('oldDebtBalance').textContent=money(d.debt_summary.old_business_balance_cents);
-  renderPersonal(); renderObligations(); renderDebts(); renderTransactions(); renderAccounts(); renderProtection(); renderSelectors(); renderPurchases(); renderPurchaseSummary();
+  renderPersonal(); renderObligations(); renderDebts(); renderTransactions(); renderOpeningTransactions(); renderAccounts(); renderProtection(); renderSelectors(); renderOpeningSelectors(); renderPurchases(); renderPurchaseSummary();
 }
 
 function renderPersonal(){
@@ -81,7 +83,12 @@ function renderDebts(){
 }
 
 function renderTransactions(){
-  $('transactionsList').innerHTML=state.transactions.map(t=>`<article class="list-card"><div class="row top"><div><h3>${esc(t.description)}</h3><p>${dateTimeBR(t.occurred_at)} · ${esc(t.source_account||t.destination_account||'sem movimentação de conta')}${t.supplier_name?` · ${esc(t.supplier_name)}`:''}${t.status==='pending_reclassification'?' · NÃO IDENTIFICADO':''}</p></div><div class="money ${t.direction==='income'?'positive':''}">${t.direction==='income'?'+':'-'}${money(t.amount_cents)}</div></div><div class="subline"><span>${labelNature(t.nature)}</span><span>${esc(t.category_name||'')}</span></div></article>`).join('')||empty('Nenhum lançamento ainda.');
+  $('transactionsList').innerHTML=state.transactions.map(t=>`<article class="list-card"><div class="row top"><div><h3>${esc(t.description)}</h3><p>${dateTimeBR(t.occurred_at)} · ${esc(t.source_account||t.destination_account||(Number(t.opening_history)?'histórico antes do app':'sem movimentação de conta'))}${t.supplier_name?` · ${esc(t.supplier_name)}`:''}${t.status==='pending_reclassification'?' · NÃO IDENTIFICADO':''}${Number(t.opening_history)?' · ANTES DO APP':''}</p></div><div class="money ${t.direction==='income'?'positive':''}">${t.direction==='income'?'+':'-'}${money(t.amount_cents)}</div></div><div class="subline"><span>${labelNature(t.nature)}</span><span>${esc(t.category_name||'')}</span></div></article>`).join('')||empty('Nenhum lançamento ainda.');
+}
+
+function renderOpeningTransactions(){
+  const items=state.transactions.filter(t=>Number(t.opening_history)===1);
+  $('openingTransactionsList').innerHTML=items.map(t=>`<article class="list-card"><div class="row top"><div><h3>${esc(t.description)}</h3><p>${dateBR(t.occurred_at)} · não altera o saldo inicial</p></div><div class="money ${t.direction==='income'?'positive':''}">${t.direction==='income'?'+':'-'}${money(t.amount_cents)}</div></div><div class="subline"><span>${labelNature(t.nature)}</span><span>${esc(t.category_name||'')}</span></div></article>`).join('')||empty('Ainda não informou gastos ou entradas anteriores à implantação.');
 }
 
 function renderAccounts(){
@@ -113,6 +120,30 @@ function renderObligationSelect(nature){const opts=state.obligations.filter(o=>o
 function renderDebtSelect(nature){const scope=nature==='personal_withdrawal'?'personal':'business';const opts=state.debts.filter(d=>d.status==='active'&&d.scope===scope);$('debt').innerHTML='<option value="">Nenhuma / não se aplica</option>'+opts.map(d=>`<option value="${d.id}">${esc(d.name)}${d.current_balance_cents!=null?` · ${money(d.current_balance_cents)}`:''}</option>`).join('');}
 function renderSupplierSelect(){const opts='<option value="">Nenhum</option>'+state.suppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');$('supplier').innerHTML=opts;$('purchaseSupplier').innerHTML='<option value="">Selecione ou cadastre abaixo</option>'+state.suppliers.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');}
 function renderAccountSelects(){const opts=state.accounts.map(a=>`<option value="${a.id}">${esc(a.name)} · ${money(a.balance_cents)}</option>`).join('');$('sourceAccount').innerHTML=opts;$('destinationAccount').innerHTML=opts;$('purchaseSource').innerHTML=opts;}
+
+function setOpeningDirection(v){
+  $('openingDirection').value=v; document.querySelectorAll('#openingDirectionSelector button').forEach(b=>b.classList.toggle('selected',b.dataset.value===v));
+  if(v==='income')$('openingNature').value='income'; else if($('openingNature').value==='income')$('openingNature').value='personal_withdrawal';
+  renderOpeningSelectors();
+}
+function renderOpeningSelectors(){
+  const direction=$('openingDirection').value; let nature=$('openingNature').value;
+  if(direction==='income'){nature='income';$('openingNature').value='income';}
+  $('openingNature').disabled=direction==='income';
+  const cats=state.categories.filter(c=>c.nature===nature); $('openingCategory').innerHTML=`<option value="">${cats.length?'Selecione':'Sem categoria'}</option>`+cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  const obligations=direction==='expense'?state.obligations.filter(o=>o.active&&o.nature===nature):[]; $('openingObligation').innerHTML='<option value="">Nenhum / não se aplica</option>'+obligations.map(o=>`<option value="${o.id}">${esc(o.name)} · falta ${money(o.remaining_cents)}</option>`).join('');
+  $('openingObligationWrap').hidden=direction!=='expense';
+}
+
+async function saveOpeningHistory(e){
+  e.preventDefault();
+  try{
+    const direction=$('openingDirection').value,nature=$('openingNature').value,amount=parseMoney($('openingAmount').value),date=$('openingDate').value;
+    if(!date||date<'2026-08-01'||date>'2026-08-10')throw new Error('A data desta aba deve estar entre 01/08 e 10/08/2026.');
+    const payload={direction,amount_cents:amount,description:$('openingDescription').value.trim(),nature,category_id:numOrNull($('openingCategory').value),obligation_id:direction==='expense'?numOrNull($('openingObligation').value):null,paid_date:date,payment_method:$('openingPaymentMethod').value,notes:$('openingNotes').value.trim()||null};
+    await api('/api/opening-history',{method:'POST',body:JSON.stringify(payload)}); toast('Histórico salvo sem alterar Mercado Pago, Nubank ou dinheiro atual.'); $('openingHistoryForm').reset(); $('openingDate').value='2026-08-10'; setOpeningDirection('expense'); await loadAll(); showView('antes');
+  }catch(err){toast(err.message);}
+}
 
 function setDirection(v){$('direction').value=v;document.querySelectorAll('#directionSelector button').forEach(b=>b.classList.toggle('selected',b.dataset.value===v));if(v==='expense'&&['income','transfer'].includes($('nature').value))$('nature').value='business_operating';renderSelectors();}
 

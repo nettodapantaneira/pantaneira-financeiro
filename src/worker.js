@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.1.1" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.2.0" });
       }
 
       if (url.pathname === "/api/auth/status" && request.method === "GET") {
@@ -118,8 +118,8 @@ export default {
         let paidDate=null;
         if(body.paid_date!=null && body.paid_date!=="") paidDate=optionalIsoDate(body.paid_date);
         const occurredAt=paidDate?`${paidDate}T16:00:00.000Z`:`${periodKey}-01T16:00:00.000Z`;
-        await env.DB.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,obligation_id,debt_id,description,notes,payment_method,recurrence_type,status)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        await env.DB.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,obligation_id,debt_id,description,notes,payment_method,recurrence_type,status,opening_history)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`).bind(
             occurredAt,periodKey,"expense",amount,null,null,obligation.nature,obligation.category_id,id,null,
             `${obligation.name} - pago antes da implantação`,
             `Pagamento ocorrido antes da fotografia inicial dos saldos. Não movimenta conta para evitar desconto em duplicidade.${paidDate?` Data informada: ${paidDate}.`:" Data exata não informada."}`,
@@ -163,6 +163,30 @@ export default {
         await env.DB.prepare("UPDATE debts SET current_balance_cents=?,monthly_target_cents=?,installment_cents=?,due_day=?,flexible=?,debt_kind=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
           .bind(balance,monthly,installment,due,flex,kind,body.notes===undefined?current.notes:nullable(body.notes),id).run();
         return json({ok:true});
+      }
+
+      if(url.pathname==="/api/opening-history" && request.method==="POST"){
+        const body=await readJson(request);
+        const direction=String(body.direction||""); if(!["income","expense"].includes(direction))return json({error:"Histórico anterior aceita somente entrada ou saída."},400);
+        let nature=String(body.nature||"");
+        if(direction==="income") nature="income";
+        if(direction==="expense" && !["business_operating","inventory","business_debt","personal_withdrawal"].includes(nature))return json({error:"Natureza inválida para saída anterior."},400);
+        const amount=toPositiveInteger(body.amount_cents,"amount_cents"); const description=String(body.description||"").trim(); if(!description)return json({error:"Descrição obrigatória."},400);
+        const paidDate=optionalIsoDate(body.paid_date); if(!paidDate || paidDate<"2026-08-01" || paidDate>"2026-08-10")return json({error:"A data deve estar entre 01/08 e 10/08/2026."},400);
+        const occurredAt=`${paidDate}T16:00:00.000Z`; const periodKey=periodKeyFromIso(occurredAt);
+        let categoryId=body.category_id==null?null:toInteger(body.category_id,"category_id");
+        if(categoryId){const cat=await env.DB.prepare("SELECT id,nature FROM categories WHERE id=? AND active=1").bind(categoryId).first(); if(!cat||cat.nature!==nature)return json({error:"Categoria incompatível com a natureza escolhida."},400);}
+        if(!categoryId){const c=await env.DB.prepare("SELECT id FROM categories WHERE nature=? AND active=1 ORDER BY id LIMIT 1").bind(nature).first(); categoryId=c?.id||null;}
+        let obligationId=direction==="expense"&&body.obligation_id!=null?toInteger(body.obligation_id,"obligation_id"):null;
+        if(obligationId){
+          const o=await env.DB.prepare("SELECT * FROM obligations WHERE id=? AND active=1").bind(obligationId).first(); if(!o)return json({error:"Conta/compromisso não encontrado."},404);
+          if(o.nature!==nature)return json({error:"A conta selecionada não combina com a natureza do lançamento."},400);
+          const paidRow=await env.DB.prepare("SELECT COALESCE(SUM(amount_cents),0) total FROM transactions WHERE obligation_id=? AND period_key=? AND direction='expense' AND status!='void'").bind(obligationId,periodKey).first();
+          const remaining=Math.max(0,Number(o.monthly_target_cents||0)-Number(paidRow?.total||0)); if(amount>remaining)return json({error:`O valor supera o que falta pagar desta conta (${formatCents(remaining)}).`},400);
+        }
+        const r=await env.DB.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,obligation_id,debt_id,description,notes,payment_method,recurrence_type,status,opening_history)
+          VALUES(?,?,?,?,NULL,NULL,?,?,?,NULL,?,?,?,?,?,1)`).bind(occurredAt,periodKey,direction,amount,nature,categoryId,obligationId,description,nullable(body.notes),normalizePaymentMethod(body.payment_method),"eventual","posted").run();
+        return json({ok:true,id:r.meta.last_row_id,does_not_change_balance:true},201);
       }
 
       if(url.pathname==="/api/transactions" && request.method==="POST"){
@@ -241,9 +265,13 @@ async function buildDashboard(db){
     COALESCE(SUM(CASE WHEN direction='expense' AND nature='personal_withdrawal' AND status!='void' THEN amount_cents ELSE 0 END),0) personal_cents
     FROM transactions WHERE occurred_at>=? AND occurred_at<?`).bind(start,end).first();
   const month=await db.prepare(`SELECT
+    COALESCE(SUM(CASE WHEN direction='income' AND status!='void' THEN amount_cents ELSE 0 END),0) income_cents,
+    COALESCE(SUM(CASE WHEN direction='expense' AND status!='void' THEN amount_cents ELSE 0 END),0) expense_cents,
     COALESCE(SUM(CASE WHEN direction='expense' AND nature='personal_withdrawal' AND status!='void' THEN amount_cents ELSE 0 END),0) personal_cents,
     COALESCE(SUM(CASE WHEN direction='expense' AND nature='business_debt' AND status!='void' THEN amount_cents ELSE 0 END),0) debt_paid_cents,
-    COALESCE(SUM(CASE WHEN direction='expense' AND nature='inventory' AND status!='void' THEN amount_cents ELSE 0 END),0) inventory_cents
+    COALESCE(SUM(CASE WHEN direction='expense' AND nature='inventory' AND status!='void' THEN amount_cents ELSE 0 END),0) inventory_cents,
+    COALESCE(SUM(CASE WHEN opening_history=1 AND direction='income' AND status!='void' THEN amount_cents ELSE 0 END),0) opening_income_cents,
+    COALESCE(SUM(CASE WHEN opening_history=1 AND direction='expense' AND status!='void' THEN amount_cents ELSE 0 END),0) opening_expense_cents
     FROM transactions WHERE occurred_at>=? AND occurred_at<?`).bind(monthStart,nextMonth).first();
 
   const personalFixed=obligations.filter(o=>o.scope==="personal"&&Number(o.personal_ceiling_member||0)===1);
@@ -260,7 +288,7 @@ async function buildDashboard(db){
     balances:{all_cents:all,business_cents:businessAvailable,business_total_cents:businessTotal,pending_business_cents:pendingBusiness,cash_cents:cash,committed_strict_cents:committedStrict,committed_flexible_cents:committedFlexible,free_strict_cents:businessAvailable-committedStrict},
     daily_protection:daily,
     today:{income_cents:Number(today?.income_cents||0),expense_cents:Number(today?.expense_cents||0),personal_withdrawal_cents:Number(today?.personal_cents||0)},
-    month:{personal_withdrawal_cents:personalUsed,debt_paid_cents:Number(month?.debt_paid_cents||0),inventory_spent_cents:Number(month?.inventory_cents||0)},
+    month:{income_cents:Number(month?.income_cents||0),expense_cents:Number(month?.expense_cents||0),net_cents:Number(month?.income_cents||0)-Number(month?.expense_cents||0),opening_income_cents:Number(month?.opening_income_cents||0),opening_expense_cents:Number(month?.opening_expense_cents||0),personal_withdrawal_cents:personalUsed,debt_paid_cents:Number(month?.debt_paid_cents||0),inventory_spent_cents:Number(month?.inventory_cents||0)},
     personal:{ceiling_cents:ceiling,withdrawn_cents:personalUsed,ceiling_remaining_cents:personalRemaining,ceiling_exceeded_cents:personalExceeded,pension:pension?{target_cents:Number(pension.monthly_target_cents||0),paid_cents:Number(pension.paid_current_cents||0),remaining_cents:Math.max(0,Number(pension.monthly_target_cents||0)-Number(pension.paid_current_cents||0))}:null,fixed_items:personalFixed.map(o=>({id:o.id,name:o.name,target_cents:Number(o.monthly_target_cents||0),paid_cents:Number(o.paid_current_cents||0)}))},
     debt_summary:{old_business_balance_cents:oldDebtBalance,active_count:debts.filter(d=>d.status==="active").length},
     accounts,obligations:obligations.slice(0,50),recent_purchases:purchases
@@ -315,7 +343,7 @@ async function listDebts(db){
 }
 
 async function listTransactions(db,limit){
-  const {results}=await db.prepare(`SELECT t.id,t.occurred_at,t.direction,t.amount_cents,t.nature,t.description,t.notes,t.payment_method,t.recurrence_type,t.status,t.obligation_id,t.debt_id,t.supplier_id,t.purchase_id,
+  const {results}=await db.prepare(`SELECT t.id,t.occurred_at,t.direction,t.amount_cents,t.nature,t.description,t.notes,t.payment_method,t.recurrence_type,t.status,t.opening_history,t.obligation_id,t.debt_id,t.supplier_id,t.purchase_id,
     sa.name source_account,da.name destination_account,c.name category_name,s.name supplier_name,d.name debt_name
     FROM transactions t LEFT JOIN accounts sa ON sa.id=t.source_account_id LEFT JOIN accounts da ON da.id=t.destination_account_id LEFT JOIN categories c ON c.id=t.category_id LEFT JOIN suppliers s ON s.id=t.supplier_id LEFT JOIN debts d ON d.id=t.debt_id
     ORDER BY t.occurred_at DESC,t.id DESC LIMIT ?`).bind(limit).all();

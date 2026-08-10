@@ -46,3 +46,11 @@ Para contas com vencimento conhecido, a meta diária usa o valor ainda não rese
 ## Ajuste de implantação
 
 Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **Já pago antes do app**. O lançamento entra no histórico do mês e reduz o compromisso, mas não movimenta as contas atuais, evitando desconto em duplicidade.
+
+## v1.2.0 — histórico inicial e dashboard
+- Nova aba **Antes** para registrar despesas e entradas ocorridas de 01 a 10/08/2026 antes da fotografia dos saldos iniciais. Esses lançamentos entram no histórico e nos relatórios, mas não movimentam novamente Mercado Pago, Nubank, dinheiro físico ou cheque.
+- Categorias pessoais adicionadas: Mercado pessoal, Combustível pessoal, Marmita, Lanche, Saúde e farmácia e Outros pessoais.
+- Categoria operacional: Combustível empresa.
+- Receitas detalhadas com Vendas da loja e Outras entradas.
+- Dashboard mensal com Faturamento informado, Pago/Saiu no mês e Entrou - Saiu.
+- Contas fixas já pagas antes do app podem ser vinculadas diretamente na aba Antes para reduzir o valor pendente sem descontar o saldo atual novamente.

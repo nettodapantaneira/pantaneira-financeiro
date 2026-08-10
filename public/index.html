@@ -65,6 +65,13 @@
           <p id="personalAlert" class="warning-text" hidden></p>
         </article>
 
+        <div class="section-title compact-title"><h2>Movimento do mês</h2><p>Inclui o que você informar de 01 a 10/08 na aba “Antes”.</p></div>
+        <div class="grid three monthly-grid">
+          <article class="metric"><span>Faturamento informado</span><strong id="monthIncome">R$ 0,00</strong></article>
+          <article class="metric"><span>Pago / saiu no mês</span><strong id="monthExpense">R$ 0,00</strong></article>
+          <article class="metric"><span>Entrou - saiu</span><strong id="monthNet">R$ 0,00</strong></article>
+        </div>
+
         <div class="grid two">
           <article class="metric"><span>Entrou hoje</span><strong id="todayIncome">R$ 0,00</strong></article>
           <article class="metric"><span>Saiu hoje</span><strong id="todayExpense">R$ 0,00</strong></article>
@@ -127,6 +134,37 @@
         </form>
       </section>
 
+      <section id="view-antes" class="view">
+        <div class="section-title"><h2>Antes do app · 01 a 10/08</h2><p>Lance aqui o que você lembrar desses primeiros 10 dias. Entra no histórico e no dashboard, mas NÃO altera os saldos atuais.</p></div>
+        <div class="notice warning"><b>Use esta aba somente para fatos que já aconteceram antes da fotografia dos saldos de 10/08.</b><br>Ex.: ChatGPT já pago, mercado pessoal, marmita, lanche, combustível ou vendas já realizadas.</div>
+        <form id="openingHistoryForm" class="form-card top-gap">
+          <div class="segmented two-segment" id="openingDirectionSelector">
+            <button type="button" data-value="expense" class="selected">Já paguei / saiu</button>
+            <button type="button" data-value="income">Já entrou / vendi</button>
+          </div>
+          <input type="hidden" id="openingDirection" value="expense" />
+          <label>Data</label><input id="openingDate" type="date" min="2026-08-01" max="2026-08-10" value="2026-08-10" required />
+          <label>Valor</label><input id="openingAmount" inputmode="decimal" placeholder="0,00" required />
+          <label>Descrição</label><input id="openingDescription" placeholder="Ex.: mercado, marmita, venda da loja" required />
+          <label>Natureza</label>
+          <select id="openingNature">
+            <option value="personal_withdrawal">Retirada pessoal</option>
+            <option value="business_operating">Empresa · operação</option>
+            <option value="inventory">Empresa · compra/estoque</option>
+            <option value="business_debt">Empresa · dívida paga</option>
+            <option value="income">Receita / faturamento</option>
+          </select>
+          <label>Categoria</label><select id="openingCategory"></select>
+          <div id="openingObligationWrap"><label>Conta/compromisso (opcional)</label><select id="openingObligation"></select><small class="muted">Vincule se for Canva, ChatGPT, aluguel, funcionário etc. Assim a conta fica marcada como paga no mês.</small></div>
+          <label>Forma (se lembrar)</label>
+          <select id="openingPaymentMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra / não lembro</option></select>
+          <label>Observação</label><textarea id="openingNotes" rows="2" placeholder="Opcional"></textarea>
+          <button class="btn primary" type="submit">Salvar no histórico sem mexer no saldo</button>
+        </form>
+        <div class="section-title"><h2>Já informado antes do app</h2></div>
+        <div id="openingTransactionsList" class="stack"></div>
+      </section>
+
       <section id="view-contas" class="view">
         <div class="section-title"><h2>Contas e compromissos</h2><p>Correntes, pessoais fixos e compras a prazo. Use “Já pago antes do app” para despesas quitadas antes da fotografia inicial: elas reduzem o compromisso sem descontar novamente os saldos atuais.</p></div>
         <button id="newObligationBtn" class="btn secondary">+ Cadastrar conta</button>
@@ -158,10 +196,12 @@
       <section id="view-relatorios" class="view">
         <div class="section-title"><h2>Resumo do mês</h2></div>
         <div class="grid two">
+          <article class="metric"><span>Faturamento informado</span><strong id="monthIncomeReport">R$ 0,00</strong></article>
+          <article class="metric"><span>Pago / saiu no mês</span><strong id="monthExpenseReport">R$ 0,00</strong></article>
           <article class="metric"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.1.0</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.2.0</strong></article>
         </div>
         <div class="section-title"><h2>Compras recentes</h2></div><div id="purchasesList" class="stack"></div>
         <div class="section-title"><h2>Últimos lançamentos</h2></div><div id="transactionsList" class="stack"></div>
@@ -173,6 +213,7 @@
     <nav class="bottom-nav">
       <button data-view="hoje" class="active"><span>⌂</span><small>Hoje</small></button>
       <button data-view="lancar"><span>＋</span><small>Lançar</small></button>
+      <button data-view="antes"><span>↶</span><small>Antes</small></button>
       <button data-view="contas"><span>▣</span><small>Contas</small></button>
       <button data-view="dividas"><span>↘</span><small>Dívidas</small></button>
       <button data-view="caixa"><span>R$</span><small>Caixa</small></button>
