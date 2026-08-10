@@ -1,43 +1,59 @@
-# Pantaneira Financeiro v1.0.2
+# Pantaneira Financeiro v1.1.0
 
-MVP financeiro independente para controle diário da Pantaneira.
+Versão consolidada do controle financeiro da Pantaneira.
 
-## O que já existe
-- PWA mobile-first.
-- Login protegido por `APP_PASSWORD` + cookie assinado com `SESSION_SECRET`.
-- Cloudflare Worker + D1.
-- Tela Hoje: disponível imediato, valores a compensar, patrimônio empresarial, comprometido, livre de verdade e proteção diária.
-- Contas/obrigações e reservas virtuais.
-- Dívidas.
-- Lançamentos com natureza + origem do dinheiro.
-- Retirada pessoal separada da operação da empresa.
-- Caixa em dinheiro com conferência e diferença não identificada.
-- Carga inicial com os valores informados até 10/08/2026.
-- Contas iniciais: Mercado Pago R$ 1.667,81; Nubank R$ 561,01; dinheiro físico R$ 184,00; cheque em mãos R$ 490,02 (fora do PODE USAR até compensar).
-- Energia loja cadastrada com padrão R$ 0,00 por uso de energia solar.
-- R$ 1.000,00 de funcionários já pagos em agosto registrados como histórico de implantação, sem descontar novamente dos saldos atuais.
-- Sem orçamento automático de compras/estoque: compras entram apenas quando realmente acontecerem.
+## Objetivo
 
-## Implantação
+Responder diariamente:
 
-1. Instale Node.js 20+ e, dentro da pasta, execute `npm install`.
-2. Autentique o Wrangler: `npx wrangler login`.
-3. Crie o D1: `npx wrangler d1 create pantaneira-financeiro-db`.
-4. O `wrangler.jsonc` desta versão já contém o `database_id` do banco `pantaneira-financeiro-db` deste projeto.
-5. Aplique a migration remota: `npm run db:migrate:remote`.
-6. Crie os segredos:
-   - `npx wrangler secret put APP_PASSWORD`
-   - `npx wrangler secret put SESSION_SECRET`
-7. Publique: `npm run deploy`.
-8. No Cloudflare, associe o domínio `financeiro.pantaneiraterere.com.br` ao Worker.
-9. Os saldos iniciais reais de 10/08/2026 são aplicados automaticamente pela migration `0002_saldos_reais_e_regras.sql`. Depois, ajuste manualmente apenas quando necessário.
+- quanto existe disponível agora;
+- quanto está comprometido com contas já assumidas;
+- quanto precisa ser protegido hoje;
+- quanto pode realmente ser usado;
+- quanto foi retirado para despesas pessoais;
+- quanto resta dentro do teto pessoal fixo;
+- quanto existe em dinheiro físico;
+- quanto falta nas dívidas antigas;
+- quanto foi comprado por fornecedor.
 
-## Desenvolvimento local
-- Copie `.dev.vars.example` para `.dev.vars` e altere os valores.
-- `npm run db:migrate:local`
-- `npm run dev`
+## Regras consolidadas
 
-## Regra de negócio central
-O saldo bancário não é o dinheiro livre. O app calcula o dinheiro livre descontando os compromissos rígidos ainda não reservados e calcula quanto precisa ser protegido por dia.
+- Mercado Pago, Nubank, dinheiro físico e cheque em mãos são controlados separadamente.
+- Cheque em mãos não entra em `PODE USAR` até ser compensado.
+- Energia da loja permanece cadastrada com valor padrão R$ 0,00 por uso de energia solar.
+- Compras não possuem orçamento mensal fixo: são registradas por compra e fornecedor quando acontecerem.
+- Compra à vista reduz o caixa imediatamente.
+- Compra a prazo cria automaticamente uma conta a pagar com vencimento.
+- Chico Dal Magro é controlado como dívida antiga, separado de compras novas com o mesmo fornecedor.
+- Dívidas antigas não geram meta mensal obrigatória: pagamentos são informados conforme houver caixa.
+- O Banco X permanece como parcela corrente enquanto a obrigação de R$ 1.200 estiver válida.
+- Custos pessoais fixos formam teto mensal de referência, atualmente R$ 2.918,00: aluguel R$ 1.200, internet R$ 109, água R$ 109 e pensão R$ 1.500.
+- Retiradas pessoais são feitas conforme a necessidade. O app alerta quando ultrapassam o teto ou consomem caixa comprometido, mas não bloqueia.
+- A pensão é obrigação pessoal prioritária e pode ser paga em partes.
+- Acordo da participação da ex é dívida pessoal flexível, fora do teto fixo.
+- Dinheiro físico tem conferência e cria diferença não identificada quando o saldo contado não bate.
 
-Para contas com vencimento conhecido, a meta diária usa o valor ainda não reservado dividido pelos dias úteis (segunda a sábado) até o vencimento. Para obrigações sem vencimento conhecido, usa a referência mensal dividida por 25 dias até que o vencimento seja cadastrado.
+## Atualização do banco
+
+A migration `0003_v1_1_0_consolidacao.sql` preserva o D1 existente e acrescenta:
+
+- fornecedores;
+- compras;
+- vencimento exato de compra a prazo;
+- classificação de dívidas antigas;
+- membros do teto pessoal;
+- vínculo de transações com fornecedor e compra.
+
+O deploy já configurado no Cloudflare deve continuar usando:
+
+```bash
+npx wrangler d1 migrations apply pantaneira-financeiro-db --remote && npx wrangler deploy
+```
+
+## Segurança
+
+Continuar usando `APP_PASSWORD` e `SESSION_SECRET` como Secrets do Cloudflare. Não inserir esses valores no GitHub.
+
+## Domínio planejado
+
+`financeiro.pantaneiraterere.com.br`

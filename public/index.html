@@ -17,7 +17,7 @@
     <div class="login-card">
       <div class="brand-mark">P</div>
       <h1>Pantaneira Financeiro</h1>
-      <p>Controle do dinheiro real, reservas e retiradas pessoais.</p>
+      <p>Caixa real, contas, dívidas antigas, compras e retiradas pessoais.</p>
       <form id="loginForm">
         <label>Senha</label>
         <input id="password" type="password" autocomplete="current-password" required />
@@ -29,10 +29,7 @@
 
   <div id="app" hidden>
     <header class="topbar">
-      <div>
-        <div class="eyebrow">PANTANEIRA</div>
-        <strong>Financeiro</strong>
-      </div>
+      <div><div class="eyebrow">PANTANEIRA</div><strong>Financeiro</strong></div>
       <button id="refreshBtn" class="icon-btn" aria-label="Atualizar">↻</button>
     </header>
 
@@ -41,39 +38,46 @@
         <div class="hero-card">
           <span>PODE USAR</span>
           <strong id="freeMoney">R$ 0,00</strong>
-          <small>saldo empresarial menos compromissos rígidos ainda não reservados</small>
+          <small>disponível imediato menos compromissos rígidos já assumidos</small>
         </div>
 
         <div class="grid two">
           <article class="metric"><span>Disponível imediato</span><strong id="businessBalance">R$ 0,00</strong></article>
           <article class="metric"><span>A compensar</span><strong id="pendingBalance">R$ 0,00</strong></article>
-          <article class="metric"><span>Comprometido</span><strong id="committed">R$ 0,00</strong></article>
+          <article class="metric"><span>Compromissos</span><strong id="committed">R$ 0,00</strong></article>
           <article class="metric"><span>Patrimônio empresa</span><strong id="businessTotal">R$ 0,00</strong></article>
         </div>
 
         <article class="protect-card">
           <div class="protect-head"><div><span>PRECISO PROTEGER HOJE</span><strong id="protectTotal">R$ 0,00</strong></div><button id="showProtectionBtn" class="link-btn">ver cálculo</button></div>
-          <div class="protect-grid">
-            <div><span>Empresa</span><b id="protectBusiness">R$ 0,00</b></div>
-            <div><span>Dívidas</span><b id="protectDebt">R$ 0,00</b></div>
-            <div><span>Pessoal</span><b id="protectPersonal">R$ 0,00</b></div>
-            <div><span>Flexível (incluído)</span><b id="protectFlexible">R$ 0,00</b></div>
+          <div class="protect-grid three">
+            <div><span>Operação</span><b id="protectBusiness">R$ 0,00</b></div>
+            <div><span>Dívidas obrigatórias</span><b id="protectDebt">R$ 0,00</b></div>
+            <div><span>Compras a prazo</span><b id="protectInventory">R$ 0,00</b></div>
           </div>
+          <p class="muted small no-margin">Dívidas antigas e teto pessoal não geram reserva automática.</p>
+        </article>
+
+        <article class="personal-card">
+          <div class="row top"><div><span class="kicker">RETIRADAS PESSOAIS · MÊS</span><strong id="personalUsed">R$ 0,00</strong></div><div class="right"><span class="muted small">Teto fixo</span><b id="personalCeiling">R$ 0,00</b></div></div>
+          <div class="progress"><span id="personalProgress"></span></div>
+          <div class="subline"><span id="personalRemaining">Restante R$ 0,00</span><span id="pensionStatus">Pensão: R$ 0,00</span></div>
+          <p id="personalAlert" class="warning-text" hidden></p>
         </article>
 
         <div class="grid two">
           <article class="metric"><span>Entrou hoje</span><strong id="todayIncome">R$ 0,00</strong></article>
           <article class="metric"><span>Saiu hoje</span><strong id="todayExpense">R$ 0,00</strong></article>
-          <article class="metric"><span>Retirada pessoal</span><strong id="todayPersonal">R$ 0,00</strong></article>
+          <article class="metric"><span>Retirada pessoal hoje</span><strong id="todayPersonal">R$ 0,00</strong></article>
           <article class="metric"><span>Dinheiro físico</span><strong id="cashBalance">R$ 0,00</strong></article>
         </div>
 
-        <div class="section-title"><h2>Reservas prioritárias</h2></div>
+        <div class="section-title"><h2>Prioridades atuais</h2><p>Contas que realmente precisam ser cobertas.</p></div>
         <div id="obligationPreview" class="stack"></div>
       </section>
 
       <section id="view-lancar" class="view">
-        <div class="section-title"><h2>Novo lançamento</h2><p>Registre o gasto e também de onde o dinheiro saiu.</p></div>
+        <div class="section-title"><h2>Novo lançamento</h2><p>Registre o gasto e de onde o dinheiro saiu.</p></div>
         <form id="transactionForm" class="form-card">
           <div class="segmented" id="directionSelector">
             <button type="button" data-value="expense" class="selected">Saída</button>
@@ -81,101 +85,91 @@
             <button type="button" data-value="transfer">Transferência</button>
           </div>
           <input type="hidden" id="direction" value="expense" />
-
-          <label>Valor</label>
-          <input id="amount" inputmode="decimal" placeholder="0,00" required />
-
-          <label>Descrição</label>
-          <input id="description" placeholder="Ex.: gasolina ida Cuiabá" required />
-
+          <label>Valor</label><input id="amount" inputmode="decimal" placeholder="0,00" required />
+          <label>Descrição</label><input id="description" placeholder="Ex.: pensão, almoço, aluguel" required />
           <label>Natureza</label>
           <select id="nature">
             <option value="business_operating">Empresa · operação</option>
-            <option value="inventory">Empresa · compras/estoque</option>
-            <option value="business_debt">Empresa · dívida</option>
+            <option value="inventory">Empresa · compra/estoque</option>
+            <option value="business_debt">Empresa · pagar dívida</option>
             <option value="personal_withdrawal">Retirada pessoal</option>
             <option value="income">Receita</option>
             <option value="transfer">Transferência</option>
           </select>
+          <label>Categoria</label><select id="category"></select>
 
-          <label>Categoria</label>
-          <select id="category"></select>
-
-          <div id="obligationWrap">
-            <label>Qual conta/compromisso?</label>
-            <select id="obligation"></select>
-            <small class="muted">Opcional, mas use quando estiver pagando uma conta ou dívida cadastrada.</small>
-          </div>
-
-          <div id="sourceWrap">
-            <label>De onde saiu?</label>
-            <select id="sourceAccount"></select>
-          </div>
-
-          <div id="destinationWrap" hidden>
-            <label>Onde entrou?</label>
-            <select id="destinationAccount"></select>
-          </div>
-
+          <div id="obligationWrap"><label>Conta/compromisso</label><select id="obligation"></select><small class="muted">Use para aluguel, funcionário, pensão ou compra a prazo cadastrada.</small></div>
+          <div id="debtWrap" hidden><label>Dívida</label><select id="debt"></select><small class="muted">Use aqui para Chico ou outra dívida antiga.</small></div>
+          <div id="supplierWrap" hidden><label>Fornecedor (opcional)</label><select id="supplier"></select></div>
+          <div id="sourceWrap"><label>De onde saiu?</label><select id="sourceAccount"></select></div>
+          <div id="destinationWrap" hidden><label>Onde entrou?</label><select id="destinationAccount"></select></div>
           <label>Forma</label>
-          <select id="paymentMethod">
-            <option value="pix">Pix</option>
-            <option value="cash">Dinheiro</option>
-            <option value="debit">Débito</option>
-            <option value="credit">Crédito</option>
-            <option value="transfer">Transferência</option>
-            <option value="boleto">Boleto</option>
-            <option value="other">Outra</option>
-          </select>
-
-          <label>Observação</label>
-          <textarea id="notes" rows="3" placeholder="Opcional"></textarea>
-
+          <select id="paymentMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra</option></select>
+          <label>Observação</label><textarea id="notes" rows="3" placeholder="Opcional"></textarea>
+          <div id="withdrawalPreview" class="notice warning" hidden></div>
           <button class="btn primary" type="submit">Salvar lançamento</button>
+        </form>
+
+        <div class="section-title"><h2>Compra por fornecedor</h2><p>Use para toda compra nova. À vista ou a prazo.</p></div>
+        <form id="purchaseForm" class="form-card">
+          <label>Fornecedor cadastrado</label><select id="purchaseSupplier"></select>
+          <label>Ou novo fornecedor</label><input id="purchaseSupplierNew" placeholder="Nome do fornecedor" />
+          <label>Valor total da compra</label><input id="purchaseTotal" inputmode="decimal" placeholder="0,00" required />
+          <label>Quanto está pagando agora?</label><input id="purchasePaidNow" inputmode="decimal" placeholder="0,00" required />
+          <div id="purchasePaymentWrap">
+            <label>De qual conta sai o pagamento agora?</label><select id="purchaseSource"></select>
+            <label>Forma</label><select id="purchaseMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra</option></select>
+          </div>
+          <div id="purchaseDueWrap" hidden><label>Vencimento do valor que ficará a pagar</label><input id="purchaseDueDate" type="date" /></div>
+          <label>Observação</label><textarea id="purchaseNotes" rows="2" placeholder="Ex.: reposição de erva"></textarea>
+          <div id="purchaseSummary" class="notice" hidden></div>
+          <button class="btn primary" type="submit">Registrar compra</button>
         </form>
       </section>
 
       <section id="view-contas" class="view">
-        <div class="section-title"><h2>Contas e reservas</h2><p>Quanto já está protegido para cada compromisso.</p></div>
-        <button id="newObligationBtn" class="btn secondary">+ Cadastrar compromisso</button>
-        <div id="obligationsList" class="stack" style="margin-top:10px"></div>
+        <div class="section-title"><h2>Contas e compromissos</h2><p>Correntes, pessoais fixos e compras a prazo.</p></div>
+        <button id="newObligationBtn" class="btn secondary">+ Cadastrar conta</button>
+        <div id="obligationsList" class="stack spaced"></div>
       </section>
 
       <section id="view-dividas" class="view">
-        <div class="section-title"><h2>Dívidas</h2><p>Acompanhe o saldo e veja a redução acontecer.</p></div>
-        <button id="newDebtBtn" class="btn secondary">+ Cadastrar dívida</button>
-        <div id="debtsList" class="stack" style="margin-top:10px"></div>
+        <div class="section-title"><h2>Dívidas antigas</h2><p>Pague conforme houver caixa. Cada pagamento reduz o saldo.</p></div>
+        <div class="grid two">
+          <article class="metric"><span>Saldo antigo conhecido</span><strong id="oldDebtBalance">R$ 0,00</strong></article>
+          <article class="metric"><span>Pago em dívidas no mês</span><strong id="monthDebt">R$ 0,00</strong></article>
+        </div>
+        <button id="newDebtBtn" class="btn secondary top-gap">+ Cadastrar dívida antiga</button>
+        <div id="debtsList" class="stack spaced"></div>
       </section>
 
       <section id="view-caixa" class="view">
-        <div class="section-title"><h2>Dinheiro físico</h2><p>Conferência para encontrar saídas que ficaram sem registro.</p></div>
-        <article class="hero-card small-hero"><span>SALDO ESPERADO</span><strong id="cashExpected">R$ 0,00</strong></article>
+        <div class="section-title"><h2>Caixa e contas</h2><p>Mercado Pago, Nubank, dinheiro e cheque em mãos separados.</p></div>
+        <div id="accountCards" class="stack"></div>
+        <div class="section-title"><h2>Conferir dinheiro físico</h2></div>
+        <article class="hero-card small-hero"><span>SALDO ESPERADO EM DINHEIRO</span><strong id="cashExpected">R$ 0,00</strong></article>
         <form id="cashForm" class="form-card">
-          <label>Quanto você contou agora?</label>
-          <input id="cashActual" inputmode="decimal" placeholder="0,00" required />
+          <label>Quanto você contou agora?</label><input id="cashActual" inputmode="decimal" placeholder="0,00" required />
           <button class="btn primary" type="submit">Conferir dinheiro</button>
         </form>
         <div id="cashResult" class="notice" hidden></div>
-        <div class="section-title"><h2>Saldos iniciais</h2><p>Informe uma vez os valores reais para começar.</p></div>
-        <div id="accountsSetup" class="stack"></div>
       </section>
 
       <section id="view-relatorios" class="view">
         <div class="section-title"><h2>Resumo do mês</h2></div>
         <div class="grid two">
           <article class="metric"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong></article>
-          <article class="metric"><span>Dívidas pagas</span><strong id="monthDebt">R$ 0,00</strong></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.0.2</strong></article>
+          <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.1.0</strong></article>
         </div>
-        <div class="section-title"><h2>Últimos lançamentos</h2></div>
-        <div id="transactionsList" class="stack"></div>
+        <div class="section-title"><h2>Compras recentes</h2></div><div id="purchasesList" class="stack"></div>
+        <div class="section-title"><h2>Últimos lançamentos</h2></div><div id="transactionsList" class="stack"></div>
         <button id="logoutBtn" class="btn danger-outline">Sair do aplicativo</button>
       </section>
     </main>
 
     <button id="fab" class="fab" aria-label="Novo lançamento">+</button>
-
     <nav class="bottom-nav">
       <button data-view="hoje" class="active"><span>⌂</span><small>Hoje</small></button>
       <button data-view="lancar"><span>＋</span><small>Lançar</small></button>
@@ -186,11 +180,7 @@
     </nav>
   </div>
 
-  <dialog id="protectionDialog">
-    <div class="dialog-head"><strong>Cálculo da proteção diária</strong><button id="closeProtection">×</button></div>
-    <div id="protectionItems" class="stack"></div>
-  </dialog>
-
+  <dialog id="protectionDialog"><div class="dialog-head"><strong>Cálculo da proteção diária</strong><button id="closeProtection">×</button></div><div id="protectionItems" class="stack"></div></dialog>
   <script type="module" src="/app.js"></script>
 </body>
 </html>
