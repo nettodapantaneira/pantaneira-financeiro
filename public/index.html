@@ -58,7 +58,7 @@
           <p class="muted small no-margin">Dívidas antigas e teto pessoal não geram reserva automática.</p>
         </article>
 
-        <article class="personal-card">
+        <article id="personalMonthCard" class="personal-card clickable-card" role="button" tabindex="0" aria-label="Ver retiradas pessoais do mês">
           <div class="row top"><div><span class="kicker">RETIRADAS PESSOAIS · MÊS</span><strong id="personalUsed">R$ 0,00</strong></div><div class="right"><span class="muted small">Teto fixo</span><b id="personalCeiling">R$ 0,00</b></div></div>
           <div class="progress"><span id="personalProgress"></span></div>
           <div class="subline"><span id="personalRemaining">Restante R$ 0,00</span><span id="pensionStatus">Pensão: R$ 0,00</span></div>
@@ -68,14 +68,14 @@
         <div class="section-title compact-title"><h2>Movimento do mês</h2><p>Inclui o que você informar de 01 a 10/08 na aba “Antes”.</p></div>
         <div class="grid three monthly-grid">
           <article class="metric"><span>Faturamento informado</span><strong id="monthIncome">R$ 0,00</strong></article>
-          <article class="metric"><span>Pago / saiu no mês</span><strong id="monthExpense">R$ 0,00</strong></article>
+          <article id="monthExpenseMetric" class="metric clickable-card" role="button" tabindex="0"><span>Pago / saiu no mês</span><strong id="monthExpense">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
           <article class="metric"><span>Entrou - saiu</span><strong id="monthNet">R$ 0,00</strong></article>
         </div>
 
         <div class="grid two">
-          <article class="metric"><span>Entrou hoje</span><strong id="todayIncome">R$ 0,00</strong></article>
-          <article class="metric"><span>Saiu hoje</span><strong id="todayExpense">R$ 0,00</strong></article>
-          <article class="metric"><span>Retirada pessoal hoje</span><strong id="todayPersonal">R$ 0,00</strong></article>
+          <article id="todayIncomeMetric" class="metric clickable-card" role="button" tabindex="0"><span>Entrou hoje</span><strong id="todayIncome">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
+          <article id="todayExpenseMetric" class="metric clickable-card" role="button" tabindex="0"><span>Saiu hoje</span><strong id="todayExpense">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
+          <article id="todayPersonalMetric" class="metric clickable-card emphasis-click" role="button" tabindex="0"><span>Retirada pessoal hoje</span><strong id="todayPersonal">R$ 0,00</strong><small class="tap-hint">toque para ver do que se trata</small></article>
           <article class="metric"><span>Dinheiro físico</span><strong id="cashBalance">R$ 0,00</strong></article>
         </div>
 
@@ -201,21 +201,21 @@
           <div class="section-title analysis-title"><h2>Análise do mês</h2><p>Entradas, saídas e para onde o dinheiro foi.</p></div>
           <article class="analysis-card">
             <div class="row top"><div><h3>Entradas e saídas</h3><span class="muted small">Fluxo informado no mês</span></div><div id="analysisNetBadge" class="analysis-badge">R$ 0,00</div></div>
-            <div class="flow-bars"><div class="flow-col"><div class="flow-bar income" id="incomeFlowBar"></div><span>Entradas</span><strong id="analysisIncome">R$ 0,00</strong></div><div class="flow-col"><div class="flow-bar expense" id="expenseFlowBar"></div><span>Saídas</span><strong id="analysisExpense">R$ 0,00</strong></div></div>
+            <div class="flow-bars"><button type="button" id="analysisIncomeDetail" class="flow-col flow-detail"><div class="flow-bar income" id="incomeFlowBar"></div><span>Entradas</span><strong id="analysisIncome">R$ 0,00</strong><small>ver detalhes</small></button><button type="button" id="analysisExpenseDetail" class="flow-col flow-detail"><div class="flow-bar expense" id="expenseFlowBar"></div><span>Saídas</span><strong id="analysisExpense">R$ 0,00</strong><small>ver detalhes</small></button></div>
           </article>
           <article class="analysis-card top-gap">
             <div class="row top"><div><h3>Saídas por categoria</h3><span class="muted small">Cada gasto identificado</span></div><strong id="categoryExpenseTotal">R$ 0,00</strong></div>
-            <div class="donut-layout"><div id="categoryDonut" class="category-donut"><div><span>Total no mês</span><strong id="categoryDonutTotal">R$ 0,00</strong></div></div><div id="categoryLegend" class="category-legend"></div></div>
+            <div class="donut-layout"><div id="categoryDonut" class="category-donut clickable-donut" role="button" tabindex="0" aria-label="Toque em uma faixa do gráfico para ver os gastos"><div><span>Total no mês</span><strong id="categoryDonutTotal">R$ 0,00</strong><small>toque em uma faixa</small></div></div><div id="categoryLegend" class="category-legend"></div></div>
           </article>
         </div>
         <div class="section-title"><h2>Resumo do mês</h2></div>
         <div class="grid two">
           <article class="metric"><span>Faturamento informado</span><strong id="monthIncomeReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Pago / saiu no mês</span><strong id="monthExpenseReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong></article>
+          <article id="monthExpenseReportMetric" class="metric clickable-card" role="button" tabindex="0"><span>Pago / saiu no mês</span><strong id="monthExpenseReport">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
+          <article id="monthPersonalMetric" class="metric clickable-card" role="button" tabindex="0"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.3.0</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.3.1</strong></article>
         </div>
         <div class="section-title"><h2>Categorias</h2><p>Você pode criar categorias novas quando surgir qualquer tipo de gasto.</p></div>
         <button id="manageCategoriesSummaryBtn" class="btn secondary">Gerenciar categorias e subcategorias</button>
@@ -237,6 +237,14 @@
     </nav>
   </div>
 
+
+  <dialog id="detailDialog" class="wide-dialog detail-dialog">
+    <div class="dialog-head"><div><strong id="detailTitle">Detalhes</strong><div id="detailSubtitle" class="muted small"></div></div><button type="button" id="closeDetailDialog">×</button></div>
+    <div class="dialog-body">
+      <div id="detailSummary" class="detail-summary"></div>
+      <div id="detailTransactions" class="stack"></div>
+    </div>
+  </dialog>
 
   <dialog id="editTransactionDialog">
     <form id="editTransactionForm" class="dialog-form" method="dialog">

@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.3.0" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.3.1" });
       }
 
       if (url.pathname === "/api/auth/status" && request.method === "GET") {
@@ -69,7 +69,14 @@ export default {
       if (url.pathname === "/api/debts" && request.method === "GET") return json({debts:await listDebts(env.DB)});
       if (url.pathname === "/api/transactions" && request.method === "GET") {
         const limit=Math.min(Math.max(Number(url.searchParams.get("limit")||50),1),200);
-        return json({transactions:await listTransactions(env.DB,limit)});
+        const filters={
+          direction:url.searchParams.get("direction")||null,
+          nature:url.searchParams.get("nature")||null,
+          period_key:url.searchParams.get("period_key")||null,
+          category_id:url.searchParams.get("category_id")||null,
+          today:url.searchParams.get("today")==="1"
+        };
+        return json({transactions:await listTransactions(env.DB,limit,filters)});
       }
       if (url.pathname === "/api/suppliers" && request.method === "GET") return json({suppliers:await listSuppliers(env.DB)});
       if (url.pathname === "/api/purchases" && request.method === "GET") return json({purchases:await listPurchases(env.DB,100)});
@@ -452,11 +459,19 @@ async function listDebts(db){
   return results;
 }
 
-async function listTransactions(db,limit){
-  const {results}=await db.prepare(`SELECT t.id,t.occurred_at,t.period_key,t.direction,t.amount_cents,t.source_account_id,t.destination_account_id,t.nature,t.category_id,t.description,t.notes,t.payment_method,t.recurrence_type,t.status,t.opening_history,t.obligation_id,t.debt_id,t.supplier_id,t.purchase_id,
-    sa.name source_account,da.name destination_account,c.name category_name,s.name supplier_name,d.name debt_name
-    FROM transactions t LEFT JOIN accounts sa ON sa.id=t.source_account_id LEFT JOIN accounts da ON da.id=t.destination_account_id LEFT JOIN categories c ON c.id=t.category_id LEFT JOIN suppliers s ON s.id=t.supplier_id LEFT JOIN debts d ON d.id=t.debt_id
-    ORDER BY t.occurred_at DESC,t.id DESC LIMIT ?`).bind(limit).all();
+async function listTransactions(db,limit,filters={}){
+  const where=[]; const binds=[];
+  if(filters.direction){where.push("t.direction=?");binds.push(filters.direction);}
+  if(filters.nature){where.push("t.nature=?");binds.push(filters.nature);}
+  if(filters.period_key){where.push("t.period_key=?");binds.push(filters.period_key);}
+  if(filters.category_id){where.push("t.category_id=?");binds.push(toInteger(filters.category_id,"category_id"));}
+  if(filters.today){const {start,end}=localDayUtcRange(new Date());where.push("t.occurred_at>=? AND t.occurred_at<?");binds.push(start,end);}
+  const clause=where.length?`WHERE ${where.join(" AND ")}`:"";
+  const sql=`SELECT t.id,t.occurred_at,t.period_key,t.direction,t.amount_cents,t.source_account_id,t.destination_account_id,t.nature,t.category_id,t.description,t.notes,t.payment_method,t.recurrence_type,t.status,t.opening_history,t.obligation_id,t.debt_id,t.supplier_id,t.purchase_id,
+    sa.name source_account,da.name destination_account,c.name category_name,pc.name parent_category_name,s.name supplier_name,d.name debt_name
+    FROM transactions t LEFT JOIN accounts sa ON sa.id=t.source_account_id LEFT JOIN accounts da ON da.id=t.destination_account_id LEFT JOIN categories c ON c.id=t.category_id LEFT JOIN categories pc ON pc.id=c.parent_id LEFT JOIN suppliers s ON s.id=t.supplier_id LEFT JOIN debts d ON d.id=t.debt_id
+    ${clause} ORDER BY t.occurred_at DESC,t.id DESC LIMIT ?`;
+  const {results}=await db.prepare(sql).bind(...binds,limit).all();
   return results;
 }
 

@@ -63,9 +63,16 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - A opção **Cancelar lançamento** tira o item dos cálculos sem apagar o registro; ele permanece visível como CANCELADO.
 - Toda edição/cancelamento é registrada em `transaction_revisions` para auditoria.
 
-## v1.3.0 — Categorias administráveis e dashboard de gastos
+## v1.3.1 — Categorias administráveis e dashboard de gastos
 - Categorias deixam de ser uma lista fechada: criar, editar, desativar e reativar pelo app.
 - Suporte a categoria principal/subcategoria.
 - Base ampliada para água mineral/consumo da loja, limpeza, expediente, embalagens, manutenção, combustível, alimentação da equipe, fretes, taxas, marketing, serviços, mercado pessoal, marmita, lanche e outros.
 - Compra por fornecedor agora informa se é estoque/insumo ou despesa operacional e exige categoria.
 - Dashboard mensal com entradas, saídas e análise das saídas por categoria, inspirado no tipo de leitura visual do Mercado Pago.
+
+
+## v1.3.1
+- Drill-down em retiradas pessoais, entradas e saídas.
+- Toque/click no gráfico de categorias para abrir os lançamentos que formam cada fatia.
+- Detalhes mostram descrição, data, categoria, conta de origem/destino, forma de pagamento, fornecedor/dívida e observações.
+- A partir do detalhamento, o lançamento pode ser aberto para edição.
