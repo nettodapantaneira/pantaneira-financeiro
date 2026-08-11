@@ -121,3 +121,13 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - `FINANCE_BOT_SECRET` continua como Secret no Cloudflare e não é incluído no repositório.
 - Mantém a correção v1.6.1 do parser de categorias/contas.
 - Não exige migration nova.
+
+
+## v1.7.0 — WhatsApp: vendas, recebimentos antigos e compras por fornecedor
+- `entrou 500 vendas mercado pago pix`: venda atual.
+- `recebi 780 boleto antigo mercado pago`: recebimento de venda anterior; não soma no Faturamento informado.
+- `compra 850 Super Compras mercado pago pix`: compra de estoque à vista, com fornecedor e baixa da conta.
+- `compra 1200 J.C. Dal Magro a prazo`: cria compra e conta a pagar sem reduzir saldo.
+- Opcional: `... a prazo vence 20/08` já cria vencimento e entra na proteção diária.
+- Compra a prazo sem vencimento fica pendente de vencimento e não entra na proteção diária até ser ajustada.
+- Relatórios separam Faturamento informado de Recebimentos de vendas anteriores.
