@@ -11,8 +11,11 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.3.1" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.4.0" });
       }
+
+      if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
+      if (url.pathname === "/api/whatsapp/webhook" && request.method === "POST") return handleWhatsAppWebhook(request,env);
 
       if (url.pathname === "/api/auth/status" && request.method === "GET") {
         const configured = Boolean(env.APP_PASSWORD && env.SESSION_SECRET);
@@ -34,6 +37,11 @@ export default {
       if (!(await isAuthenticated(request, env))) return json({error:"Não autorizado."},401);
 
       if (url.pathname === "/api/dashboard" && request.method === "GET") return json(await buildDashboard(env.DB));
+      if (url.pathname === "/api/month-summary" && request.method === "GET") {
+        const periodKey=validatePeriodKey(url.searchParams.get("period_key")||periodKeyLocal(new Date()));
+        return json(await buildMonthSummary(env.DB,periodKey));
+      }
+      if (url.pathname === "/api/periods" && request.method === "GET") return json({periods:await listPeriods(env.DB)});
       if (url.pathname === "/api/accounts" && request.method === "GET") return json({accounts:await listAccountsWithBalances(env.DB)});
       if (url.pathname === "/api/categories" && request.method === "GET") {
         const includeInactive=url.searchParams.get("all")==="1";
@@ -74,12 +82,26 @@ export default {
           nature:url.searchParams.get("nature")||null,
           period_key:url.searchParams.get("period_key")||null,
           category_id:url.searchParams.get("category_id")||null,
+          opening_history:url.searchParams.get("opening_history")||null,
           today:url.searchParams.get("today")==="1"
         };
         return json({transactions:await listTransactions(env.DB,limit,filters)});
       }
       if (url.pathname === "/api/suppliers" && request.method === "GET") return json({suppliers:await listSuppliers(env.DB)});
       if (url.pathname === "/api/purchases" && request.method === "GET") return json({purchases:await listPurchases(env.DB,100)});
+
+      const reconcileAccountMatch=url.pathname.match(/^\/api\/accounts\/(\d+)\/reconcile$/);
+      if(reconcileAccountMatch && request.method==="POST"){
+        const id=Number(reconcileAccountMatch[1]); const body=await readJson(request);
+        const account=await accountBalance(env.DB,id); if(!account)return json({error:"Conta não encontrada."},404);
+        if(Number(account.available_for_spending??1)===0)return json({error:"Ativos a compensar devem ser tratados pela compensação, não por conciliação de saldo."},400);
+        const newBalance=toNonNegativeInteger(body.new_balance_cents,"new_balance_cents");
+        const previous=Number(account.balance_cents||0); const diff=newBalance-previous;
+        if(diff===0)return json({ok:true,no_change:true,balance_cents:previous});
+        await env.DB.prepare(`INSERT INTO account_balance_adjustments(account_id,previous_balance_cents,new_balance_cents,difference_cents,reason,notes) VALUES(?,?,?,?,?,?)`)
+          .bind(id,previous,newBalance,diff,nullable(body.reason),nullable(body.notes)).run();
+        return json({ok:true,previous_balance_cents:previous,new_balance_cents:newBalance,difference_cents:diff});
+      }
 
       const openingMatch=url.pathname.match(/^\/api\/accounts\/(\d+)\/opening-balance$/);
       if(openingMatch && request.method==="POST"){
@@ -208,7 +230,8 @@ export default {
         if(direction==="income") nature="income";
         if(direction==="expense" && !["business_operating","inventory","business_debt","personal_withdrawal"].includes(nature))return json({error:"Natureza inválida para saída anterior."},400);
         const amount=toPositiveInteger(body.amount_cents,"amount_cents"); const description=String(body.description||"").trim(); if(!description)return json({error:"Descrição obrigatória."},400);
-        const paidDate=optionalIsoDate(body.paid_date); if(!paidDate || paidDate<"2026-08-01" || paidDate>"2026-08-10")return json({error:"A data deve estar entre 01/08 e 10/08/2026."},400);
+        const paidDate=optionalIsoDate(body.paid_date); const historicalStart=(await getSetting(env.DB,"historical_entry_start_date"))||"2026-07-01"; const historicalEnd=(await getSetting(env.DB,"historical_entry_end_date"))||"2026-08-10";
+        if(!paidDate || paidDate<historicalStart || paidDate>historicalEnd)return json({error:`A data histórica deve ficar entre ${historicalStart} e ${historicalEnd}.`},400);
         const occurredAt=`${paidDate}T16:00:00.000Z`; const periodKey=periodKeyFromIso(occurredAt);
         let categoryId=body.category_id==null?null:toInteger(body.category_id,"category_id");
         if(categoryId){const cat=await env.DB.prepare("SELECT id,nature FROM categories WHERE id=? AND active=1").bind(categoryId).first(); if(!cat||cat.nature!==nature)return json({error:"Categoria incompatível com a natureza escolhida."},400);}
@@ -220,8 +243,11 @@ export default {
           const paidRow=await env.DB.prepare("SELECT COALESCE(SUM(amount_cents),0) total FROM transactions WHERE obligation_id=? AND period_key=? AND direction='expense' AND status!='void'").bind(obligationId,periodKey).first();
           const remaining=Math.max(0,Number(o.monthly_target_cents||0)-Number(paidRow?.total||0)); if(amount>remaining)return json({error:`O valor supera o que falta pagar desta conta (${formatCents(remaining)}).`},400);
         }
+        const historicalAccount=body.account_id==null?null:toInteger(body.account_id,"account_id");
+        if(historicalAccount){const a=await env.DB.prepare("SELECT id FROM accounts WHERE id=? AND active=1").bind(historicalAccount).first();if(!a)return json({error:"Conta/origem histórica inválida."},400);}
+        const sourceAccount=direction==="expense"?historicalAccount:null; const destinationAccount=direction==="income"?historicalAccount:null;
         const r=await env.DB.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,obligation_id,debt_id,description,notes,payment_method,recurrence_type,status,opening_history)
-          VALUES(?,?,?,?,NULL,NULL,?,?,?,NULL,?,?,?,?,?,1)`).bind(occurredAt,periodKey,direction,amount,nature,categoryId,obligationId,description,nullable(body.notes),normalizePaymentMethod(body.payment_method),"eventual","posted").run();
+          VALUES(?,?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,1)`).bind(occurredAt,periodKey,direction,amount,sourceAccount,destinationAccount,nature,categoryId,obligationId,description,nullable(body.notes),normalizePaymentMethod(body.payment_method),"eventual","posted").run();
         return json({ok:true,id:r.meta.last_row_id,does_not_change_balance:true},201);
       }
 
@@ -269,7 +295,8 @@ export default {
           let occurredAt=current.occurred_at;
           if(body.occurred_at!==undefined){
             const paidDate=optionalIsoDate(String(body.occurred_at).slice(0,10));
-            if(!paidDate || paidDate<"2026-08-01" || paidDate>"2026-08-10")return json({error:"A data do histórico inicial deve ficar entre 01/08 e 10/08/2026."},400);
+            const historicalStart=(await getSetting(env.DB,"historical_entry_start_date"))||"2026-07-01"; const historicalEnd=(await getSetting(env.DB,"historical_entry_end_date"))||"2026-08-10";
+            if(!paidDate || paidDate<historicalStart || paidDate>historicalEnd)return json({error:`A data histórica deve ficar entre ${historicalStart} e ${historicalEnd}.`},400);
             occurredAt=`${paidDate}T16:00:00.000Z`;
           }
           const periodKey=periodKeyFromIso(occurredAt);
@@ -277,7 +304,9 @@ export default {
           categoryId=await validCategoryForNature(env.DB,categoryId,nature);
           let obligationId=direction==="expense"?(body.obligation_id===undefined?current.obligation_id:(body.obligation_id==null?null:toInteger(body.obligation_id,"obligation_id"))):null;
           await validateObligationPayment(env.DB,obligationId,nature,periodKey,amount,id);
-          next={occurred_at:occurredAt,period_key:periodKey,direction,amount_cents:amount,source_account_id:null,destination_account_id:null,nature,category_id:categoryId,obligation_id:obligationId,debt_id:null,description,notes:body.notes===undefined?current.notes:nullable(body.notes),payment_method:body.payment_method===undefined?current.payment_method:normalizePaymentMethod(body.payment_method),recurrence_type:current.recurrence_type||"eventual",status:"posted",supplier_id:current.supplier_id,purchase_id:current.purchase_id};
+          const historicalAccount=body.source_account_id??body.destination_account_id??current.source_account_id??current.destination_account_id??null;
+          const historicalAccountId=historicalAccount==null?null:toInteger(historicalAccount,"historical_account_id");
+          next={occurred_at:occurredAt,period_key:periodKey,direction,amount_cents:amount,source_account_id:direction==="expense"?historicalAccountId:null,destination_account_id:direction==="income"?historicalAccountId:null,nature,category_id:categoryId,obligation_id:obligationId,debt_id:null,description,notes:body.notes===undefined?current.notes:nullable(body.notes),payment_method:body.payment_method===undefined?current.payment_method:normalizePaymentMethod(body.payment_method),recurrence_type:current.recurrence_type||"eventual",status:"posted",supplier_id:current.supplier_id,purchase_id:current.purchase_id};
         }else{
           const candidate={
             direction:body.direction===undefined?current.direction:body.direction,
@@ -412,18 +441,42 @@ async function buildDashboard(db){
   };
 }
 
+async function buildMonthSummary(db,periodKey){
+  periodKey=validatePeriodKey(periodKey);
+  const month=await db.prepare(`SELECT
+    COALESCE(SUM(CASE WHEN direction='income' AND status!='void' THEN amount_cents ELSE 0 END),0) income_cents,
+    COALESCE(SUM(CASE WHEN direction='expense' AND status!='void' THEN amount_cents ELSE 0 END),0) expense_cents,
+    COALESCE(SUM(CASE WHEN direction='expense' AND nature='personal_withdrawal' AND status!='void' THEN amount_cents ELSE 0 END),0) personal_cents,
+    COALESCE(SUM(CASE WHEN direction='expense' AND nature='business_debt' AND status!='void' THEN amount_cents ELSE 0 END),0) debt_paid_cents,
+    COALESCE(SUM(CASE WHEN direction='expense' AND nature='inventory' AND status!='void' THEN amount_cents ELSE 0 END),0) inventory_cents
+    FROM transactions WHERE period_key=?`).bind(periodKey).first();
+  const categorySpending=(await db.prepare(`SELECT c.id,c.name,c.nature,COALESCE(p.name,'') parent_name,SUM(t.amount_cents) total_cents
+    FROM transactions t JOIN categories c ON c.id=t.category_id LEFT JOIN categories p ON p.id=c.parent_id
+    WHERE t.period_key=? AND t.direction='expense' AND t.status!='void'
+    GROUP BY c.id,c.name,c.nature,p.name ORDER BY total_cents DESC,c.name`).bind(periodKey).all()).results.map(r=>({...r,total_cents:Number(r.total_cents||0)}));
+  const income=Number(month?.income_cents||0),expense=Number(month?.expense_cents||0);
+  return {period_key:periodKey,month:{income_cents:income,expense_cents:expense,net_cents:income-expense,personal_withdrawal_cents:Number(month?.personal_cents||0),debt_paid_cents:Number(month?.debt_paid_cents||0),inventory_spent_cents:Number(month?.inventory_cents||0)},category_spending:categorySpending};
+}
+
+async function listPeriods(db){
+  const rows=(await db.prepare(`SELECT DISTINCT period_key FROM transactions WHERE status!='void' ORDER BY period_key DESC`).all()).results.map(r=>r.period_key);
+  const current=periodKeyLocal(new Date()); if(!rows.includes(current))rows.unshift(current); if(!rows.includes('2026-07'))rows.push('2026-07');
+  return [...new Set(rows)].sort().reverse();
+}
+
 async function listAccountsWithBalances(db){
   const {results}=await db.prepare(`SELECT a.id,a.name,a.owner_scope,a.account_type,a.opening_balance_cents,a.available_for_spending,a.active,a.notes,
     a.opening_balance_cents
-    +COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.destination_account_id=a.id AND t.status!='void'),0)
-    -COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.source_account_id=a.id AND t.status!='void'),0) balance_cents
+    +COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.destination_account_id=a.id AND t.status!='void' AND COALESCE(t.opening_history,0)=0),0)
+    -COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.source_account_id=a.id AND t.status!='void' AND COALESCE(t.opening_history,0)=0),0)
+    +COALESCE((SELECT SUM(x.difference_cents) FROM account_balance_adjustments x WHERE x.account_id=a.id),0) balance_cents
     FROM accounts a WHERE a.active=1 ORDER BY CASE a.owner_scope WHEN 'business' THEN 0 ELSE 1 END,a.id`).all();
   return results.map(r=>({...r,balance_cents:Number(r.balance_cents||0)}));
 }
 
 async function accountBalance(db,id){
   return db.prepare(`SELECT a.id,a.name,a.owner_scope,a.account_type,a.opening_balance_cents,a.available_for_spending,
-    a.opening_balance_cents+COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.destination_account_id=a.id AND t.status!='void'),0)-COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.source_account_id=a.id AND t.status!='void'),0) balance_cents
+    a.opening_balance_cents+COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.destination_account_id=a.id AND t.status!='void' AND COALESCE(t.opening_history,0)=0),0)-COALESCE((SELECT SUM(t.amount_cents) FROM transactions t WHERE t.source_account_id=a.id AND t.status!='void' AND COALESCE(t.opening_history,0)=0),0)+COALESCE((SELECT SUM(x.difference_cents) FROM account_balance_adjustments x WHERE x.account_id=a.id),0) balance_cents
     FROM accounts a WHERE a.id=? AND a.active=1`).bind(id).first();
 }
 
@@ -465,6 +518,7 @@ async function listTransactions(db,limit,filters={}){
   if(filters.nature){where.push("t.nature=?");binds.push(filters.nature);}
   if(filters.period_key){where.push("t.period_key=?");binds.push(filters.period_key);}
   if(filters.category_id){where.push("t.category_id=?");binds.push(toInteger(filters.category_id,"category_id"));}
+  if(filters.opening_history!==null&&filters.opening_history!==undefined&&filters.opening_history!==""){where.push("t.opening_history=?");binds.push(String(filters.opening_history)==="1"?1:0);}
   if(filters.today){const {start,end}=localDayUtcRange(new Date());where.push("t.occurred_at>=? AND t.occurred_at<?");binds.push(start,end);}
   const clause=where.length?`WHERE ${where.join(" AND ")}`:"";
   const sql=`SELECT t.id,t.occurred_at,t.period_key,t.direction,t.amount_cents,t.source_account_id,t.destination_account_id,t.nature,t.category_id,t.description,t.notes,t.payment_method,t.recurrence_type,t.status,t.opening_history,t.obligation_id,t.debt_id,t.supplier_id,t.purchase_id,
@@ -614,6 +668,80 @@ function validateTransaction(body){
   return {occurred_at:occurredAt,period_key:periodKeyFromIso(occurredAt),direction,amount_cents:amount,source_account_id:source,destination_account_id:destination,nature,category_id:body.category_id==null?null:toInteger(body.category_id,"category_id"),obligation_id:body.obligation_id==null?null:toInteger(body.obligation_id,"obligation_id"),debt_id:body.debt_id==null?null:toInteger(body.debt_id,"debt_id"),supplier_id:body.supplier_id==null?null:toInteger(body.supplier_id,"supplier_id"),purchase_id:body.purchase_id==null?null:toInteger(body.purchase_id,"purchase_id"),description,notes:nullable(body.notes),payment_method:normalizePaymentMethod(body.payment_method),recurrence_type:body.recurrence_type==="recurring"?"recurring":"eventual"};
 }
 
+function verifyWhatsAppWebhook(url,env){
+  const mode=url.searchParams.get("hub.mode"),token=url.searchParams.get("hub.verify_token"),challenge=url.searchParams.get("hub.challenge");
+  if(mode==="subscribe"&&env.WHATSAPP_VERIFY_TOKEN&&safeEqual(String(token||""),String(env.WHATSAPP_VERIFY_TOKEN)))return new Response(String(challenge||""),{status:200,headers:{"Content-Type":"text/plain"}});
+  return new Response("Forbidden",{status:403});
+}
+
+async function handleWhatsAppWebhook(request,env){
+  const raw=await request.text();
+  if(env.WHATSAPP_APP_SECRET){const sig=request.headers.get("X-Hub-Signature-256")||"";if(!(await verifyMetaSignature(raw,sig,env.WHATSAPP_APP_SECRET)))return new Response("Invalid signature",{status:401});}
+  let payload;try{payload=JSON.parse(raw);}catch{return new Response("Bad payload",{status:400});}
+  const messages=[];for(const entry of payload.entry||[])for(const change of entry.changes||[]){const value=change.value||{};for(const m of value.messages||[])messages.push(m);}
+  for(const m of messages){if(m.type!=="text"||!m.text?.body)continue;await processWhatsAppText(env,m).catch(()=>{});}
+  return new Response("EVENT_RECEIVED",{status:200});
+}
+
+async function processWhatsAppText(env,m){
+  const from=digitsOnly(m.from||""); const allowed=String(env.WHATSAPP_ALLOWED_NUMBER||"").split(",").map(digitsOnly).filter(Boolean);
+  const ins=await env.DB.prepare("INSERT OR IGNORE INTO whatsapp_messages(message_id,wa_from,message_type,text_body) VALUES(?,?,?,?)").bind(String(m.id||crypto.randomUUID()),from,m.type,String(m.text.body||"")).run();
+  if(!ins.meta.changes)return;
+  if(!allowed.length||!allowed.includes(from)){await env.DB.prepare("UPDATE whatsapp_messages SET processed=1,result_json=? WHERE message_id=?").bind(JSON.stringify({ignored:"unauthorized"}),m.id).run();return;}
+  const text=String(m.text.body||"").trim();let result;
+  try{result=await executeWhatsAppCommand(env.DB,text);}
+  catch(err){result={reply:`Não consegui registrar: ${err.message}\n\nExemplos:\n• gasto 45 marmita dinheiro\n• gasto 120 mercado pessoal mercado pago pix\n• paguei 500 chico nubank pix\n• entrou 850 vendas mercado pago\n• 05/07 gasto 80 combustível pessoal dinheiro\n• saldo\n• resumo julho`};}
+  await env.DB.prepare("UPDATE whatsapp_messages SET processed=1,result_json=? WHERE message_id=?").bind(JSON.stringify(result),m.id).run();
+  if(result?.reply)await sendWhatsAppText(env,from,result.reply);
+}
+
+async function executeWhatsAppCommand(db,input){
+  const raw=input.trim(),norm=normalizeText(raw);
+  if(norm==="ajuda"||norm==="help")return {reply:"Pantaneira Financeiro pelo WhatsApp:\n• gasto 45 marmita dinheiro\n• gasto 120 mercado pessoal mercado pago pix\n• paguei 500 chico nubank pix\n• entrou 850 vendas mercado pago\n• 05/07 gasto 80 combustivel pessoal dinheiro\n• saldo\n• resumo julho\n\nSe faltar conta ou categoria, eu não lanço para evitar erro."};
+  if(norm==="saldo"||norm.startsWith("saldo ")){const d=await buildDashboard(db);const acc=d.accounts.filter(a=>a.owner_scope==="business").map(a=>`${a.name}: ${formatCents(a.balance_cents)}${Number(a.available_for_spending)===0?" (a compensar)":""}`).join("\n");return {reply:`SALDOS\n${acc}\n\nPode usar: ${formatCents(d.balances.free_strict_cents)}\nCompromissos: ${formatCents(d.balances.committed_strict_cents)}`};}
+  if(norm.startsWith("resumo")){const key=parseRequestedPeriod(norm);const d=await buildMonthSummary(db,key);return {reply:`RESUMO ${periodLabel(key)}\nEntradas: ${formatCents(d.month.income_cents)}\nSaídas: ${formatCents(d.month.expense_cents)}\nEntrou - saiu: ${formatCents(d.month.net_cents)}\nPessoal: ${formatCents(d.month.personal_withdrawal_cents)}\nDívidas: ${formatCents(d.month.debt_paid_cents)}\nCompras/estoque: ${formatCents(d.month.inventory_spent_cents)}`};}
+
+  let text=raw,date=null;const dm=text.match(/^\s*(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\s+/);if(dm){let y=dm[3]?Number(dm[3]):2026;if(y<100)y+=2000;date=`${y}-${String(Number(dm[2])).padStart(2,"0")}-${String(Number(dm[1])).padStart(2,"0")}`;optionalIsoDate(date);text=text.slice(dm[0].length);}
+  const n=normalizeText(text);let direction=n.match(/^(entrou|recebi|vendi|venda)\b/)?"income":(n.match(/^(gasto|gastei|paguei|saida|saiu)\b/)?"expense":null);if(!direction)throw new Error("comece com GASTO/PAGUEI ou ENTROU/VENDI.");
+  const amountMatch=text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/i);if(!amountMatch)throw new Error("não encontrei o valor.");const amount=parsePtMoneyToCents(amountMatch[1]);
+  const accounts=await listAccountsWithBalances(db);const account=findAccountAlias(accounts,n);const categories=(await db.prepare("SELECT id,name,nature,parent_id,active FROM categories WHERE active=1").all()).results;const cat=await findWhatsAppCategory(db,categories,n,direction);if(!cat)throw new Error("categoria não reconhecida. Escreva, por exemplo, mercado pessoal, marmita, combustível pessoal, água mineral, limpeza, vendas etc.");
+  let nature=direction==="income"?"income":cat.nature;let debtId=null,obligationId=null;
+  if(direction==="expense"){const debts=await listDebts(db);const debt=debts.find(d=>normalizeText(n).includes(normalizeText(d.name))||normalizeText(n).includes(normalizeText(d.creditor||""))||(normalizeText(d.name).includes("chico")&&n.includes("chico")));if(debt){debtId=Number(debt.id);nature=debt.scope==="personal"?"personal_withdrawal":"business_debt";const debtCat=categories.find(c=>c.nature===nature);if(debtCat)cat.id=debtCat.id;}
+    const obs=(await db.prepare("SELECT id,name,nature,active FROM obligations WHERE active=1").all()).results.find(o=>n.includes(normalizeText(o.name)));if(obs&&obs.nature===nature)obligationId=Number(obs.id);
+  }
+  const historicalEnd=(await getSetting(db,"historical_entry_end_date"))||"2026-08-10";const historicalStart=(await getSetting(db,"historical_entry_start_date"))||"2026-07-01";const historical=Boolean(date&&date>=historicalStart&&date<=historicalEnd);
+  if(date&&date>historicalEnd&&date!==localIsoDate(new Date()))throw new Error("para lançamentos após a implantação, use a data atual no WhatsApp ou edite pelo app.");
+  if(!historical&&!account)throw new Error("informe a conta: mercado pago, nubank ou dinheiro.");
+  const occurredAt=`${date||localIsoDate(new Date())}T16:00:00.000Z`,periodKey=periodKeyFromIso(occurredAt),description=buildWhatsappDescription(text,amountMatch[0]);
+  const method=n.includes("pix")?"pix":n.includes("dinheiro")?"cash":n.includes("debito")?"debit":n.includes("credito")?"credit":n.includes("boleto")?"boleto":n.includes("transfer")?"transfer":"other";
+  const source=direction==="expense"?(account?.id||null):null,destination=direction==="income"?(account?.id||null):null;
+  const r=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,obligation_id,debt_id,description,notes,payment_method,recurrence_type,status,opening_history) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(occurredAt,periodKey,direction,amount,source,destination,nature,cat.id,obligationId,debtId,description,"Lançado pelo WhatsApp",method,"eventual","posted",historical?1:0).run();
+  if(debtId&&direction==="expense"&&!historical)await reduceDebt(db,debtId,amount);
+  const prefix=historical?"Histórico registrado sem alterar o saldo atual":"Registrado";return {reply:`${prefix}: ${direction==="income"?"entrada":"saída"} de ${formatCents(amount)}\n${cat.name}\n${account?`${direction==="income"?"Entrou em":"Saiu de"}: ${account.name}\n`:""}${date?`Data: ${date.split('-').reverse().join('/')}\n`:""}ID #${r.meta.last_row_id}`};
+}
+
+async function findWhatsAppCategory(db,categories,n,direction){
+  if(direction==="income")return categories.find(c=>c.nature==="income"&&(normalizeText(c.name).includes("vendas")||normalizeText(c.name).includes("receita")))||categories.find(c=>c.nature==="income");
+  const aliases=[
+    ["agua mineral","Água mineral e consumo da loja"],["limpeza","Produtos de limpeza"],["marmita","Marmita"],["lanche","Lanche"],["mercado pessoal","Mercado pessoal"],["mercado","Mercado pessoal"],["combustivel pessoal","Combustível pessoal"],["gasolina pessoal","Combustível pessoal"],["gasolina loja","Combustível empresa"],["combustivel empresa","Combustível empresa"],["gasolina","Combustível pessoal"],["chatgpt","Sistemas e aplicativos"],["canva","Sistemas e aplicativos"],["vectorize","Sistemas e aplicativos"],["erp","Sistemas e aplicativos"],["pensao","Família e pensão"],["doacao","Doações"],["aluguel casa","Moradia"],["aluguel loja","Aluguel e ocupação"],["frete","Fretes e entregas"]
+  ];
+  for(const [alias,name] of aliases)if(n.includes(alias)){const c=categories.find(x=>normalizeText(x.name)===normalizeText(name));if(c)return {...c};}
+  const direct=[...categories].sort((a,b)=>normalizeText(b.name).length-normalizeText(a.name).length).find(c=>n.includes(normalizeText(c.name)));return direct?{...direct}:null;
+}
+
+function findAccountAlias(accounts,n){const aliases=[["mercado pago","Mercado Pago"],[" mp ","Mercado Pago"],["nubank","Nubank"],["dinheiro","Dinheiro físico"],["caixa","Dinheiro físico"]];for(const [alias,name] of aliases)if((` ${n} `).includes(alias.trim()==="mp"?" mp ":alias)){const a=accounts.find(x=>normalizeText(x.name)===normalizeText(name));if(a)return a;}return accounts.find(a=>n.includes(normalizeText(a.name)))||null;}
+function buildWhatsappDescription(text,amountText){let s=text.replace(amountText,"").replace(/^(gasto|gastei|paguei|saida|saiu|entrou|recebi|vendi|venda)\s*/i,"").trim();return s||"Lançamento WhatsApp";}
+function parseRequestedPeriod(n){const now=periodKeyLocal(new Date());if(n.includes("julho"))return "2026-07";if(n.includes("agosto"))return "2026-08";const m=n.match(/\b(\d{4})-(0[1-9]|1[0-2])\b/);return m?m[0]:now;}
+function periodLabel(key){const [y,m]=key.split("-").map(Number);return new Intl.DateTimeFormat("pt-BR",{month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(Date.UTC(y,m-1,1))).toUpperCase();}
+function normalizeText(v){return String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim();}
+function digitsOnly(v){return String(v||"").replace(/\D/g,"");}
+function parsePtMoneyToCents(v){const s=String(v).replace(/\./g,"").replace(",",".");const n=Number(s);if(!Number.isFinite(n)||n<=0)throw new Error("valor inválido.");return Math.round(n*100);}
+function localIsoDate(date){const p=localDateParts(date);return `${p.year}-${String(p.month).padStart(2,"0")}-${String(p.day).padStart(2,"0")}`;}
+async function verifyMetaSignature(raw,header,secret){if(!header.startsWith("sha256="))return false;const expected=await hmacHex(raw,secret);return safeEqual(header.slice(7),expected);}
+async function hmacHex(value,secret){const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);const out=new Uint8Array(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(value)));return [...out].map(b=>b.toString(16).padStart(2,"0")).join("");}
+async function sendWhatsAppText(env,to,body){if(!env.WHATSAPP_ACCESS_TOKEN||!env.WHATSAPP_PHONE_NUMBER_ID)return;const version=String(env.WHATSAPP_GRAPH_VERSION||"v26.0");await fetch(`https://graph.facebook.com/${version}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`,{method:"POST",headers:{Authorization:`Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,"Content-Type":"application/json"},body:JSON.stringify({messaging_product:"whatsapp",to,type:"text",text:{body}})});}
+
 async function getSetting(db,key){const r=await db.prepare("SELECT value FROM settings WHERE key=?").bind(key).first();return r?.value??null;}
 
 async function isAuthenticated(request,env){
@@ -634,6 +762,7 @@ function nextPeriodKey(key){const [y,m]=key.split("-").map(Number);const d=new D
 function periodKeyFromIso(iso){return periodKeyLocal(new Date(iso));}
 function localDayUtcRange(date){const p=localDateParts(date);return {start:new Date(Date.UTC(p.year,p.month-1,p.day,4)).toISOString(),end:new Date(Date.UTC(p.year,p.month-1,p.day+1,4)).toISOString()};}
 function localMonthUtcRange(date){const p=localDateParts(date);return {monthStart:new Date(Date.UTC(p.year,p.month-1,1,4)).toISOString(),nextMonth:new Date(Date.UTC(p.year,p.month,1,4)).toISOString()};}
+function validatePeriodKey(v){const s=String(v||"");if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(s))throw new Error("Período inválido.");return s;}
 function optionalDueDay(v){if(v==null||v==="")return null;const n=toInteger(v,"due_day");if(n<1||n>31)throw new Error("Dia de vencimento deve estar entre 1 e 31.");return n;}
 function optionalIsoDate(v){if(v==null||v==="")return null;const s=String(v).slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s)||Number.isNaN(new Date(`${s}T12:00:00Z`).valueOf()))throw new Error("Data inválida.");return s;}
 function normalizePaymentMethod(v){if(v==null||v==="")return null;const s=String(v);if(!ALLOWED_PAYMENT_METHODS.includes(s))throw new Error("Forma de pagamento inválida.");return s;}

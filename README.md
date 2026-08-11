@@ -76,3 +76,12 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - Toque/click no gráfico de categorias para abrir os lançamentos que formam cada fatia.
 - Detalhes mostram descrição, data, categoria, conta de origem/destino, forma de pagamento, fornecedor/dívida e observações.
 - A partir do detalhamento, o lançamento pode ser aberto para edição.
+
+
+## v1.4.0 — Histórico mensal, conciliação e WhatsApp
+- Histórico anterior ampliado para julho/2026 e 01–10/08/2026, sem alterar os saldos atuais.
+- Análise mensal com seletor de período (julho/agosto e demais meses lançados).
+- Conciliação de saldo das contas bancárias com trilha de auditoria, sem apagar lançamentos.
+- Endpoint oficial do WhatsApp Cloud API em `/api/whatsapp/webhook`, com validação de webhook, assinatura `X-Hub-Signature-256`, lista de número autorizado e deduplicação de mensagens.
+- Comandos iniciais via WhatsApp: `saldo`, `resumo julho`, entradas e saídas por texto; lançamentos históricos com data (ex.: `05/07 gasto 80 combustivel pessoal dinheiro`).
+- Para ativar WhatsApp configure Secrets: `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ALLOWED_NUMBER`; opcional `WHATSAPP_GRAPH_VERSION` (padrão v26.0).

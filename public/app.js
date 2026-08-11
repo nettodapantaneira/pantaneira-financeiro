@@ -1,4 +1,4 @@
-const state={dashboard:null,accounts:[],categories:[],obligations:[],debts:[],transactions:[],suppliers:[],purchases:[],analysisSegments:[]};
+const state={dashboard:null,analysis:null,analysisPeriod:null,periods:[],accounts:[],categories:[],obligations:[],debts:[],transactions:[],historyTransactions:[],suppliers:[],purchases:[],analysisSegments:[]};
 const $=id=>document.getElementById(id);
 const money=c=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format((Number(c)||0)/100);
 const pct=(a,b)=>b>0?Math.max(0,Math.min(100,Math.round(a/b*100))):0;
@@ -33,21 +33,23 @@ function bindEvents(){
   bindDetailTrigger('todayExpenseMetric',()=>openTransactionDetail({title:'Saídas de hoje',today:true,direction:'expense'}));
   bindDetailTrigger('todayIncomeMetric',()=>openTransactionDetail({title:'Entradas de hoje',today:true,direction:'income'}));
   bindDetailTrigger('personalMonthCard',()=>openTransactionDetail({title:'Retiradas pessoais do mês',period_key:state.dashboard?.period_key,direction:'expense',nature:'personal_withdrawal'}));
-  bindDetailTrigger('monthPersonalMetric',()=>openTransactionDetail({title:'Retiradas pessoais do mês',period_key:state.dashboard?.period_key,direction:'expense',nature:'personal_withdrawal'}));
+  bindDetailTrigger('monthPersonalMetric',()=>openTransactionDetail({title:'Retiradas pessoais do mês',period_key:state.analysisPeriod||state.dashboard?.period_key,direction:'expense',nature:'personal_withdrawal'}));
   bindDetailTrigger('monthExpenseMetric',()=>openTransactionDetail({title:'Todas as saídas do mês',period_key:state.dashboard?.period_key,direction:'expense'}));
-  bindDetailTrigger('monthExpenseReportMetric',()=>openTransactionDetail({title:'Todas as saídas do mês',period_key:state.dashboard?.period_key,direction:'expense'}));
-  $('analysisIncomeDetail').addEventListener('click',()=>openTransactionDetail({title:'Entradas do mês',period_key:state.dashboard?.period_key,direction:'income'}));
-  $('analysisExpenseDetail').addEventListener('click',()=>openTransactionDetail({title:'Saídas do mês',period_key:state.dashboard?.period_key,direction:'expense'}));
+  bindDetailTrigger('monthExpenseReportMetric',()=>openTransactionDetail({title:'Todas as saídas do mês',period_key:state.analysisPeriod||state.dashboard?.period_key,direction:'expense'}));
+  $('analysisIncomeDetail').addEventListener('click',()=>openTransactionDetail({title:'Entradas do mês',period_key:state.analysisPeriod||state.dashboard?.period_key,direction:'income'}));
+  $('analysisExpenseDetail').addEventListener('click',()=>openTransactionDetail({title:'Saídas do mês',period_key:state.analysisPeriod||state.dashboard?.period_key,direction:'expense'}));
+  $('analysisPeriod').addEventListener('change',()=>loadAnalysisPeriod($('analysisPeriod').value));
   $('categoryDonut').addEventListener('click',openDonutSegment);
   $('categoryDonut').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();if(state.analysisSegments[0])openCategoryDetail(state.analysisSegments[0].id,state.analysisSegments[0].label);}});
 }
 
 async function loadAll(){
   try{
-    const [dashboard,accounts,categories,obligations,debts,transactions,suppliers,purchases]=await Promise.all([
-      api('/api/dashboard'),api('/api/accounts'),api('/api/categories?all=1'),api('/api/obligations'),api('/api/debts'),api('/api/transactions?limit=120'),api('/api/suppliers'),api('/api/purchases')
+    const [dashboard,accounts,categories,obligations,debts,transactions,historyTransactions,suppliers,purchases,periods]=await Promise.all([
+      api('/api/dashboard'),api('/api/accounts'),api('/api/categories?all=1'),api('/api/obligations'),api('/api/debts'),api('/api/transactions?limit=160'),api('/api/transactions?limit=200&opening_history=1'),api('/api/suppliers'),api('/api/purchases'),api('/api/periods')
     ]);
-    Object.assign(state,{dashboard,accounts:accounts.accounts,categories:categories.categories,obligations:obligations.obligations,debts:debts.debts,transactions:transactions.transactions,suppliers:suppliers.suppliers,purchases:purchases.purchases});
+    const analysisPeriod=state.analysisPeriod||dashboard.period_key; const analysis=await api(`/api/month-summary?period_key=${encodeURIComponent(analysisPeriod)}`);
+    Object.assign(state,{dashboard,analysis,analysisPeriod,periods:periods.periods||[],accounts:accounts.accounts,categories:categories.categories,obligations:obligations.obligations,debts:debts.debts,transactions:transactions.transactions,historyTransactions:historyTransactions.transactions,suppliers:suppliers.suppliers,purchases:purchases.purchases});
     renderAll();
   }catch(err){if(err.status===401){location.reload();return;}toast(err.message);}
 }
@@ -104,14 +106,14 @@ function renderTransactions(){
 }
 
 function renderOpeningTransactions(){
-  const items=state.transactions.filter(t=>Number(t.opening_history)===1);
+  const items=state.historyTransactions||[];
   $('openingTransactionsList').innerHTML=items.map(t=>transactionCard(t,true)).join('')||empty('Ainda não informou gastos ou entradas anteriores à implantação.');
   document.querySelectorAll('#openingTransactionsList [data-edit-transaction]').forEach(b=>b.addEventListener('click',()=>openTransactionEditor(Number(b.dataset.editTransaction))));
 }
 
 function transactionCard(t,openingOnly){
   const isVoid=t.status==='void',opening=Number(t.opening_history)===1;
-  const account=t.source_account||t.destination_account||(opening?'histórico antes do app':'sem movimentação de conta');
+  const account=t.source_account||t.destination_account||(opening?'histórico · origem não informada':'sem movimentação de conta');
   const when=openingOnly?dateBR(t.occurred_at):dateTimeBR(t.occurred_at);
   const meta=[when,account,t.supplier_name||null,t.status==='pending_reclassification'?'NÃO IDENTIFICADO':null,opening&&!openingOnly?'ANTES DO APP':null,isVoid?'CANCELADO':null].filter(Boolean).map(esc).join(' · ');
   const sign=t.direction==='income'?'+':t.direction==='transfer'?'↔':'-';
@@ -120,8 +122,8 @@ function transactionCard(t,openingOnly){
 
 function renderAccounts(){
   const business=state.accounts.filter(a=>a.owner_scope==='business');
-  $('accountCards').innerHTML=business.map(a=>`<article class="list-card"><div class="row"><div><h3>${esc(a.name)}</h3><p>${accountType(a.account_type)}${Number(a.available_for_spending)===0?' · a compensar':''}</p></div><div class="right"><div class="money">${money(a.balance_cents)}</div><button class="text-mini" data-adjust-account="${a.id}">ajustar inicial</button></div></div></article>`).join('');
-  document.querySelectorAll('[data-adjust-account]').forEach(b=>b.addEventListener('click',()=>adjustOpening(Number(b.dataset.adjustAccount))));
+  $('accountCards').innerHTML=business.map(a=>`<article class="list-card"><div class="row"><div><h3>${esc(a.name)}</h3><p>${accountType(a.account_type)}${Number(a.available_for_spending)===0?' · a compensar':''}</p></div><div class="right"><div class="money">${money(a.balance_cents)}</div>${Number(a.available_for_spending)===1&&a.account_type!=='cash'?`<button class="text-mini" data-reconcile-account="${a.id}">conciliar saldo</button>`:a.account_type==='cash'?'<span class="muted small">use Conferir dinheiro</span>':'<span class="muted small">aguardando compensação</span>'}</div></div></article>`).join('');
+  document.querySelectorAll('[data-reconcile-account]').forEach(b=>b.addEventListener('click',()=>reconcileAccount(Number(b.dataset.reconcileAccount))));
 }
 
 function renderPurchases(){
@@ -163,16 +165,18 @@ function renderOpeningSelectors(){
   const cats=activeCategories(nature); $('openingCategory').innerHTML=`<option value="">${cats.length?'Selecione':'Sem categoria'}</option>`+cats.map(c=>`<option value="${c.id}">${esc(categoryLabel(c))}</option>`).join('');
   const obligations=direction==='expense'?state.obligations.filter(o=>o.active&&o.nature===nature):[]; $('openingObligation').innerHTML='<option value="">Nenhum / não se aplica</option>'+obligations.map(o=>`<option value="${o.id}">${esc(o.name)} · falta ${money(o.remaining_cents)}</option>`).join('');
   $('openingObligationWrap').hidden=direction!=='expense';
+  $('openingAccountLabel').textContent=direction==='income'?'Onde entrou? (se lembrar)':'De onde saiu? (se lembrar)';
+  $('openingAccount').innerHTML='<option value="">Não lembro / não informar</option>'+state.accounts.filter(a=>a.owner_scope==='business').map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
 }
 
 async function saveOpeningHistory(e){
   e.preventDefault();
   try{
     const direction=$('openingDirection').value,nature=$('openingNature').value,amount=parseMoney($('openingAmount').value),date=$('openingDate').value;
-    if(!date||date<'2026-08-01'||date>'2026-08-10')throw new Error('A data desta aba deve estar entre 01/08 e 10/08/2026.');
+    if(!date||date<'2026-07-01'||date>'2026-08-10')throw new Error('A data histórica deve ficar entre 01/07 e 10/08/2026.');
     const openingCategoryId=numOrNull($('openingCategory').value); if(!openingCategoryId)throw new Error('Escolha ou cadastre uma categoria.');
-    const payload={direction,amount_cents:amount,description:$('openingDescription').value.trim(),nature,category_id:openingCategoryId,obligation_id:direction==='expense'?numOrNull($('openingObligation').value):null,paid_date:date,payment_method:$('openingPaymentMethod').value,notes:$('openingNotes').value.trim()||null};
-    await api('/api/opening-history',{method:'POST',body:JSON.stringify(payload)}); toast('Histórico salvo sem alterar Mercado Pago, Nubank ou dinheiro atual.'); $('openingHistoryForm').reset(); $('openingDate').value='2026-08-10'; setOpeningDirection('expense'); await loadAll(); showView('antes');
+    const payload={direction,amount_cents:amount,description:$('openingDescription').value.trim(),nature,category_id:openingCategoryId,obligation_id:direction==='expense'?numOrNull($('openingObligation').value):null,account_id:numOrNull($('openingAccount').value),paid_date:date,payment_method:$('openingPaymentMethod').value,notes:$('openingNotes').value.trim()||null};
+    await api('/api/opening-history',{method:'POST',body:JSON.stringify(payload)}); toast('Histórico salvo sem alterar os saldos atuais.'); $('openingHistoryForm').reset(); $('openingDate').value='2026-08-10'; setOpeningDirection('expense'); await loadAll(); showView('antes');
   }catch(err){toast(err.message);}
 }
 
@@ -287,6 +291,11 @@ async function createObligation(){const name=prompt('Nome da conta/compromisso')
 async function editDebt(id){const d=state.debts.find(x=>x.id===id);if(!d)return;const value=prompt(`Saldo atual de ${d.name}`,d.current_balance_cents==null?'':centsToInput(d.current_balance_cents));if(value==null)return;try{await api(`/api/debts/${id}`,{method:'PATCH',body:JSON.stringify({current_balance_cents:value.trim()?parseMoney(value):null})});toast('Saldo da dívida atualizado.');await loadAll();}catch(err){toast(err.message);}}
 async function createDebt(){const name=prompt('Nome da dívida antiga / credor');if(!name)return;const value=prompt('Saldo atual conhecido (pode deixar vazio)','');const personal=confirm('Essa dívida é pessoal? OK = pessoal / Cancelar = empresa');try{await api('/api/debts',{method:'POST',body:JSON.stringify({name,creditor:name,scope:personal?'personal':'business',current_balance_cents:value.trim()?parseMoney(value):null,debt_kind:personal?'personal_agreement':'old',flexible:true})});toast('Dívida antiga cadastrada.');await loadAll();}catch(err){toast(err.message);}}
 async function adjustOpening(id){const a=state.accounts.find(x=>x.id===id);if(!a)return;const value=prompt(`Saldo inicial de ${a.name}. Use apenas para corrigir a fotografia inicial.`,centsToInput(a.opening_balance_cents));if(value==null)return;try{await api(`/api/accounts/${id}/opening-balance`,{method:'POST',body:JSON.stringify({opening_balance_cents:parseMoney(value)})});toast('Saldo inicial atualizado.');await loadAll();}catch(err){toast(err.message);}}
+async function reconcileAccount(id){const a=state.accounts.find(x=>Number(x.id)===id);if(!a)return;const value=prompt(`Saldo real agora em ${a.name}:`,centsToInput(a.balance_cents));if(value==null)return;const reason=prompt('Motivo do ajuste (ex.: conciliação com extrato, taxa esquecida, lançamento faltante):','Conciliação com saldo real');if(reason==null)return;const next=parseMoney(value),diff=next-Number(a.balance_cents||0);if(diff===0){toast('O saldo já está conciliado.');return;}if(!confirm(`Saldo no app: ${money(a.balance_cents)}
+Saldo real: ${money(next)}
+Diferença: ${diff>=0?'+ ':''}${money(diff)}
+
+Registrar ajuste sem apagar o histórico?`))return;try{await api(`/api/accounts/${id}/reconcile`,{method:'POST',body:JSON.stringify({new_balance_cents:next,reason})});toast('Saldo conciliado com registro de auditoria.');await loadAll();}catch(err){toast(err.message);}}
 
 function natureGroupLabel(n){return ({business_operating:'Empresa · operação',inventory:'Empresa · compras/estoque',business_debt:'Empresa · dívidas',personal_withdrawal:'Pessoal',income:'Receitas'})[n]||labelNature(n);}
 
@@ -315,20 +324,27 @@ async function saveCategory(e){
 async function toggleCategory(id){const c=state.categories.find(x=>Number(x.id)===id);if(!c)return;const active=Number(c.active)===0;if(!active&&!confirm(`Desativar a categoria “${c.name}”?\n\nOs lançamentos antigos continuam preservados.`))return;try{await api(`/api/categories/${id}`,{method:'PATCH',body:JSON.stringify({active})});toast(active?'Categoria reativada.':'Categoria desativada.');await loadAll();renderCategoryManager();}catch(err){toast(err.message);}}
 
 function renderAnalysisDashboard(){
-  const d=state.dashboard;if(!d)return; const inc=Number(d.month.income_cents||0),exp=Number(d.month.expense_cents||0),max=Math.max(inc,exp,1); $('analysisIncome').textContent=money(inc);$('analysisExpense').textContent=money(exp);$('analysisNetBadge').textContent=`${d.month.net_cents>=0?'+ ':''}${money(d.month.net_cents)}`;$('analysisNetBadge').classList.toggle('negative',d.month.net_cents<0);$('incomeFlowBar').style.height=`${Math.max(10,Math.round(110*inc/max))}px`;$('expenseFlowBar').style.height=`${Math.max(10,Math.round(110*exp/max))}px`;
+  const d=state.analysis||{period_key:state.dashboard?.period_key,month:state.dashboard?.month||{},category_spending:state.dashboard?.category_spending||[]};if(!d)return;
+  const options=[...new Set([...(state.periods||[]),d.period_key,'2026-07','2026-08'])].filter(Boolean).sort().reverse();
+  $('analysisPeriod').innerHTML=options.map(k=>`<option value="${k}">${periodLabelClient(k)}</option>`).join('');$('analysisPeriod').value=d.period_key;state.analysisPeriod=d.period_key;
+  const inc=Number(d.month.income_cents||0),exp=Number(d.month.expense_cents||0),max=Math.max(inc,exp,1); $('analysisIncome').textContent=money(inc);$('analysisExpense').textContent=money(exp);$('analysisNetBadge').textContent=`${d.month.net_cents>=0?'+ ':''}${money(d.month.net_cents)}`;$('analysisNetBadge').classList.toggle('negative',d.month.net_cents<0);$('incomeFlowBar').style.height=`${Math.max(10,Math.round(110*inc/max))}px`;$('expenseFlowBar').style.height=`${Math.max(10,Math.round(110*exp/max))}px`;
+  $('monthIncomeReport').textContent=money(inc);$('monthExpenseReport').textContent=money(exp);$('monthPersonal').textContent=money(d.month.personal_withdrawal_cents||0);$('monthInventory').textContent=money(d.month.inventory_spent_cents||0);$('monthDebtReport').textContent=money(d.month.debt_paid_cents||0);
   const items=(d.category_spending||[]).filter(x=>Number(x.total_cents)>0);const total=items.reduce((a,x)=>a+Number(x.total_cents||0),0);$('categoryExpenseTotal').textContent=money(total);$('categoryDonutTotal').textContent=money(total);const top=items.slice(0,7);const colors=['#4A4EE8','#3C7F86','#51327F','#D57724','#D348B9','#31515A','#8B95A7'];let angle=0,parts=[];state.analysisSegments=[];top.forEach((x,i)=>{const share=total?Number(x.total_cents)/total:0;const end=angle+share*360;const label=x.parent_name?`${x.parent_name} › ${x.name}`:x.name;parts.push(`${colors[i%colors.length]} ${angle}deg ${end}deg`);state.analysisSegments.push({id:Number(x.id),label,start:angle,end,total_cents:Number(x.total_cents||0)});angle=end;});if(angle<360)parts.push(`#EEF1F6 ${angle}deg 360deg`);$('categoryDonut').style.background=parts.length?`conic-gradient(${parts.join(',')})`:'#EEF1F6';$('categoryLegend').innerHTML=top.map((x,i)=>{const label=x.parent_name?`${x.parent_name} › ${x.name}`:x.name;return `<button type="button" class="legend-row" data-category-detail="${x.id}" aria-label="Ver lançamentos de ${esc(label)}"><span class="legend-dot" style="background:${colors[i%colors.length]}"></span><div><strong>${esc(label)}</strong><small>${money(x.total_cents)} · ${total?Math.round(Number(x.total_cents)/total*100):0}% · ver detalhes</small></div></button>`;}).join('')||'<p class="muted">Ainda não há saídas categorizadas no mês.</p>';
   document.querySelectorAll('[data-category-detail]').forEach(b=>b.addEventListener('click',()=>{const seg=state.analysisSegments.find(x=>x.id===Number(b.dataset.categoryDetail));if(seg)openCategoryDetail(seg.id,seg.label);}));
 }
+
+async function loadAnalysisPeriod(periodKey){try{state.analysisPeriod=periodKey;state.analysis=await api(`/api/month-summary?period_key=${encodeURIComponent(periodKey)}`);renderAnalysisDashboard();}catch(err){toast(err.message);}}
+function periodLabelClient(key){const [y,m]=String(key).split('-').map(Number);return new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(y,m-1,1)));}
 
 function bindDetailTrigger(id,fn){const el=$(id);if(!el)return;el.addEventListener('click',fn);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fn();}});}
 
 function openDonutSegment(event){
   if(!state.analysisSegments.length)return; const rect=$('categoryDonut').getBoundingClientRect(); const x=event.clientX-(rect.left+rect.width/2),y=event.clientY-(rect.top+rect.height/2);
-  if(Math.hypot(x,y)<rect.width*.28){openTransactionDetail({title:'Todas as saídas do mês',period_key:state.dashboard?.period_key,direction:'expense'});return;}
+  if(Math.hypot(x,y)<rect.width*.28){openTransactionDetail({title:'Todas as saídas do mês',period_key:state.analysisPeriod||state.dashboard?.period_key,direction:'expense'});return;}
   let angle=Math.atan2(y,x)*180/Math.PI+90;if(angle<0)angle+=360;const seg=state.analysisSegments.find(s=>angle>=s.start&&angle<s.end);if(seg)openCategoryDetail(seg.id,seg.label);
 }
 
-function openCategoryDetail(categoryId,label){return openTransactionDetail({title:label,subtitle:'Gastos desta categoria no mês',period_key:state.dashboard?.period_key,direction:'expense',category_id:categoryId});}
+function openCategoryDetail(categoryId,label){return openTransactionDetail({title:label,subtitle:`Gastos desta categoria em ${periodLabelClient(state.analysisPeriod||state.dashboard?.period_key)}`,period_key:state.analysisPeriod||state.dashboard?.period_key,direction:'expense',category_id:categoryId});}
 
 async function openTransactionDetail(filters){
   try{
@@ -343,7 +359,7 @@ async function openTransactionDetail(filters){
 }
 
 function detailTransactionCard(t){
-  const cat=categoryDisplayForTransaction(t);const opening=Number(t.opening_history)===1;const origin=t.direction==='income'?(t.destination_account||'Destino não informado'):(t.source_account||(opening?'Antes do app · origem não registrada':'Origem não informada')); const payment=paymentMethodLabel(t.payment_method);
+  const cat=categoryDisplayForTransaction(t);const opening=Number(t.opening_history)===1;const origin=t.direction==='income'?(t.destination_account||(opening?'Histórico · destino não informado':'Destino não informado')):(t.source_account||(opening?'Histórico · origem não registrada':'Origem não informada')); const payment=paymentMethodLabel(t.payment_method);
   const extras=[t.supplier_name?`Fornecedor: ${t.supplier_name}`:null,t.debt_name?`Dívida: ${t.debt_name}`:null,t.notes?`Obs.: ${t.notes}`:null].filter(Boolean);
   return `<article class="list-card detail-card"><div class="row top"><div><h3>${esc(t.description)}</h3><p>${dateTimeBR(t.occurred_at)}${opening?' · ANTES DO APP':''}</p></div><div class="money ${t.direction==='income'?'positive':''}">${t.direction==='income'?'+':'-'}${money(t.amount_cents)}</div></div><div class="detail-meta"><span class="detail-category">${esc(cat)}</span><span class="detail-origin">${t.direction==='income'?'Entrou em':'Saiu de'}: ${esc(origin)}</span><span>Forma: ${esc(payment)}</span>${extras.map(x=>`<span>${esc(x)}</span>`).join('')}</div><div class="edit-actions"><button class="mini-btn" data-detail-edit="${t.id}">Editar lançamento</button></div></article>`;
 }

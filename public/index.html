@@ -65,7 +65,7 @@
           <p id="personalAlert" class="warning-text" hidden></p>
         </article>
 
-        <div class="section-title compact-title"><h2>Movimento do mês</h2><p>Inclui o que você informar de 01 a 10/08 na aba “Antes”.</p></div>
+        <div class="section-title compact-title"><h2>Movimento do mês</h2><p>Inclui o histórico que você informar de julho e 01 a 10/08.</p></div>
         <div class="grid three monthly-grid">
           <article class="metric"><span>Faturamento informado</span><strong id="monthIncome">R$ 0,00</strong></article>
           <article id="monthExpenseMetric" class="metric clickable-card" role="button" tabindex="0"><span>Pago / saiu no mês</span><strong id="monthExpense">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
@@ -138,15 +138,15 @@
       </section>
 
       <section id="view-antes" class="view">
-        <div class="section-title"><h2>Antes do app · 01 a 10/08</h2><p>Lance aqui o que você lembrar desses primeiros 10 dias. Entra no histórico e no dashboard, mas NÃO altera os saldos atuais.</p></div>
-        <div class="notice warning"><b>Use esta aba somente para fatos que já aconteceram antes da fotografia dos saldos de 10/08.</b><br>Ex.: ChatGPT já pago, mercado pessoal, marmita, lanche, combustível ou vendas já realizadas.</div>
+        <div class="section-title"><h2>Histórico anterior · julho e 01 a 10/08</h2><p>Reconstrua julho inteiro e os primeiros dias de agosto. Entra nos relatórios do mês escolhido, mas NÃO altera os saldos atuais.</p></div>
+        <div class="notice warning"><b>Use para fatos anteriores à fotografia dos saldos de 10/08.</b><br>Você pode lançar todo julho e 01 a 10/08: despesas, retiradas pessoais, contas pagas e faturamento.</div>
         <form id="openingHistoryForm" class="form-card top-gap">
           <div class="segmented two-segment" id="openingDirectionSelector">
             <button type="button" data-value="expense" class="selected">Já paguei / saiu</button>
             <button type="button" data-value="income">Já entrou / vendi</button>
           </div>
           <input type="hidden" id="openingDirection" value="expense" />
-          <label>Data</label><input id="openingDate" type="date" min="2026-08-01" max="2026-08-10" value="2026-08-10" required />
+          <label>Data</label><input id="openingDate" type="date" min="2026-07-01" max="2026-08-10" value="2026-08-10" required />
           <label>Valor</label><input id="openingAmount" inputmode="decimal" placeholder="0,00" required />
           <label>Descrição</label><input id="openingDescription" placeholder="Ex.: mercado, marmita, venda da loja" required />
           <label>Natureza</label>
@@ -159,6 +159,7 @@
           </select>
           <div class="field-head"><label>Categoria</label><button type="button" id="manageOpeningCategoriesBtn" class="link-btn">+ cadastrar / editar</button></div><select id="openingCategory"></select>
           <div id="openingObligationWrap"><label>Conta/compromisso (opcional)</label><select id="openingObligation"></select><small class="muted">Vincule se for Canva, ChatGPT, aluguel, funcionário etc. Assim a conta fica marcada como paga no mês.</small></div>
+          <label id="openingAccountLabel">De onde saiu? (se lembrar)</label><select id="openingAccount"><option value="">Não lembro / não informar</option></select><small class="muted">É apenas informação histórica e não altera o saldo atual.</small>
           <label>Forma (se lembrar)</label>
           <select id="openingPaymentMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra / não lembro</option></select>
           <label>Observação</label><textarea id="openingNotes" rows="2" placeholder="Opcional"></textarea>
@@ -199,6 +200,7 @@
       <section id="view-relatorios" class="view">
         <div class="analysis-shell">
           <div class="section-title analysis-title"><h2>Análise do mês</h2><p>Entradas, saídas e para onde o dinheiro foi.</p></div>
+          <div class="form-card compact-form analysis-period-card"><label>Mês da análise</label><select id="analysisPeriod"></select></div>
           <article class="analysis-card">
             <div class="row top"><div><h3>Entradas e saídas</h3><span class="muted small">Fluxo informado no mês</span></div><div id="analysisNetBadge" class="analysis-badge">R$ 0,00</div></div>
             <div class="flow-bars"><button type="button" id="analysisIncomeDetail" class="flow-col flow-detail"><div class="flow-bar income" id="incomeFlowBar"></div><span>Entradas</span><strong id="analysisIncome">R$ 0,00</strong><small>ver detalhes</small></button><button type="button" id="analysisExpenseDetail" class="flow-col flow-detail"><div class="flow-bar expense" id="expenseFlowBar"></div><span>Saídas</span><strong id="analysisExpense">R$ 0,00</strong><small>ver detalhes</small></button></div>
@@ -215,7 +217,7 @@
           <article id="monthPersonalMetric" class="metric clickable-card" role="button" tabindex="0"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.3.1</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.4.0</strong></article>
         </div>
         <div class="section-title"><h2>Categorias</h2><p>Você pode criar categorias novas quando surgir qualquer tipo de gasto.</p></div>
         <button id="manageCategoriesSummaryBtn" class="btn secondary">Gerenciar categorias e subcategorias</button>
@@ -229,7 +231,7 @@
     <nav class="bottom-nav">
       <button data-view="hoje" class="active"><span>⌂</span><small>Hoje</small></button>
       <button data-view="lancar"><span>＋</span><small>Lançar</small></button>
-      <button data-view="antes"><span>↶</span><small>Antes</small></button>
+      <button data-view="antes"><span>↶</span><small>Histórico</small></button>
       <button data-view="contas"><span>▣</span><small>Contas</small></button>
       <button data-view="dividas"><span>↘</span><small>Dívidas</small></button>
       <button data-view="caixa"><span>R$</span><small>Caixa</small></button>
