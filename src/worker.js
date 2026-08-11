@@ -11,11 +11,13 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.5.0" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.6.0" });
       }
 
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "POST") return handleWhatsAppWebhook(request,env);
+
+      if (url.pathname === "/api/internal/finance-command" && request.method === "POST") return handleInternalFinanceCommand(request,env);
 
       if (url.pathname === "/api/auth/status" && request.method === "GET") {
         const configured = Boolean(env.APP_PASSWORD && env.SESSION_SECRET);
@@ -666,6 +668,18 @@ function validateTransaction(body){
   if(direction==="expense"&&!source)throw new Error("Informe de onde saiu o dinheiro."); if(direction==="income"&&!destination)throw new Error("Informe onde o dinheiro entrou."); if(direction==="transfer"&&(!source||!destination||source===destination))throw new Error("Transferência exige origem e destino diferentes.");
   const occurredAt=body.occurred_at?new Date(body.occurred_at).toISOString():new Date().toISOString();
   return {occurred_at:occurredAt,period_key:periodKeyFromIso(occurredAt),direction,amount_cents:amount,source_account_id:source,destination_account_id:destination,nature,category_id:body.category_id==null?null:toInteger(body.category_id,"category_id"),obligation_id:body.obligation_id==null?null:toInteger(body.obligation_id,"obligation_id"),debt_id:body.debt_id==null?null:toInteger(body.debt_id,"debt_id"),supplier_id:body.supplier_id==null?null:toInteger(body.supplier_id,"supplier_id"),purchase_id:body.purchase_id==null?null:toInteger(body.purchase_id,"purchase_id"),description,notes:nullable(body.notes),payment_method:normalizePaymentMethod(body.payment_method),recurrence_type:body.recurrence_type==="recurring"?"recurring":"eventual"};
+}
+
+
+async function handleInternalFinanceCommand(request,env){
+  if(!env.FINANCE_BOT_SECRET)return json({error:"FINANCE_BOT_SECRET não configurado."},503);
+  const provided=String(request.headers.get("X-Finance-Bot-Secret")||"");
+  if(!safeEqual(provided,String(env.FINANCE_BOT_SECRET)))return json({error:"Não autorizado."},401);
+  const body=await readJson(request);const from=digitsOnly(body.from||"");const allowed=String(env.WHATSAPP_ALLOWED_NUMBER||"").split(",").map(digitsOnly).filter(Boolean);
+  if(!from||!allowed.includes(from))return json({error:"Número não autorizado."},403);
+  const text=String(body.text||"").trim();if(!text)return json({error:"Comando vazio."},400);
+  try{const result=await executeWhatsAppCommand(env.DB,text);return json({ok:true,reply:result?.reply||"Comando processado."});}
+  catch(err){return json({ok:false,reply:`Não consegui registrar: ${err.message}`,error:String(err.message||err)},400);}
 }
 
 function verifyWhatsAppWebhook(url,env){

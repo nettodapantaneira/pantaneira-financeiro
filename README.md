@@ -93,3 +93,15 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - Histórico acessível por Movimentos.
 - Dashboard Hoje reorganizado com saldos por origem e hierarquia visual mais clara.
 - Análises mantêm drill-down por categoria e lançamentos.
+
+
+## v1.6.0 — layout bancário + ponte privada para o bot
+
+- Dashboard desktop inspirado em apps bancários: menu lateral, saldo/extrato, ações rápidas e análise lateral.
+- Mobile mantém navegação inferior e o mesmo fluxo funcional.
+- Ações rápidas para Entrada, Saída, Compra e Transferência.
+- Extrato recente na tela Hoje.
+- Análise mensal e saídas por categoria também visíveis na tela Hoje.
+- Novo endpoint privado `POST /api/internal/finance-command` para o Worker do chatbot encaminhar comandos do administrador.
+- O endpoint exige `FINANCE_BOT_SECRET` e valida o número em `WHATSAPP_ALLOWED_NUMBER`.
+- A integração recomendada usa Service Binding do bot para este Worker; o número do administrador não é migrado nem alterado no WhatsApp Business.

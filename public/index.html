@@ -30,61 +30,101 @@
   <div id="app" hidden>
     <header class="topbar">
       <div class="topbar-brand"><div class="brand-mini">P</div><div><div class="eyebrow">PANTANEIRA</div><strong>Financeiro</strong></div></div>
+      <div class="topbar-title">Saldo e extrato</div>
       <button id="refreshBtn" class="icon-btn" aria-label="Atualizar">↻</button>
     </header>
 
+    <aside class="desktop-sidebar" aria-label="Navegação principal">
+      <div class="sidebar-logo"><div class="brand-mini">P</div><div><span>PANTANEIRA</span><strong>Financeiro</strong></div></div>
+      <nav class="sidebar-nav">
+        <button data-view="hoje" class="active"><span>▣</span><b>Saldo e extrato</b></button>
+        <button data-view="lancar"><span>＋</span><b>Movimentos</b></button>
+        <button data-view="contas"><span>▤</span><b>Contas</b></button>
+        <button data-view="dividas"><span>↘</span><b>Dívidas</b></button>
+        <button data-view="relatorios"><span>◔</span><b>Análises</b></button>
+      </nav>
+      <div class="sidebar-foot"><small>Controle financeiro Pantaneira</small><strong>v1.6.0</strong></div>
+    </aside>
+
     <main>
       <section id="view-hoje" class="view active">
-        <div class="page-heading"><div><span class="page-kicker">VISÃO DO CAIXA</span><h1>Hoje</h1><p>O que está disponível, o que já tem destino e onde o dinheiro está.</p></div></div>
-        <div class="hero-card">
-          <span>PODE USAR</span>
-          <strong id="freeMoney">R$ 0,00</strong>
-          <small>disponível imediato menos compromissos rígidos já assumidos</small>
-        </div>
+        <div class="mp-home-grid">
+          <div class="mp-main-column">
+            <div class="page-heading mp-page-heading"><div><span class="page-kicker">VISÃO FINANCEIRA</span><h1>Saldo e extrato</h1><p>Seu caixa real, compromissos e movimentos em um só lugar.</p></div></div>
 
-        <div class="home-section-head"><div><span>SUAS CONTAS</span><strong>Saldo por origem</strong></div><button type="button" id="openAccountsOverviewBtn" class="link-action">ver contas →</button></div>
-        <div id="accountOverview" class="account-strip"></div>
+            <article class="mp-balance-card">
+              <div class="mp-balance-copy"><span>PODE USAR AGORA</span><strong id="freeMoney">R$ 0,00</strong><small>dinheiro disponível menos compromissos rígidos já assumidos</small></div>
+              <div class="mp-balance-stats">
+                <div><span>Disponível imediato</span><b id="businessBalance">R$ 0,00</b></div>
+                <div><span>Compromissos</span><b id="committed">R$ 0,00</b></div>
+                <div><span>A compensar</span><b id="pendingBalance">R$ 0,00</b></div>
+                <div><span>Patrimônio empresa</span><b id="businessTotal">R$ 0,00</b></div>
+              </div>
+            </article>
 
-        <div class="grid two balance-grid">
-          <article class="metric"><span>Disponível imediato</span><strong id="businessBalance">R$ 0,00</strong></article>
-          <article class="metric"><span>A compensar</span><strong id="pendingBalance">R$ 0,00</strong></article>
-          <article class="metric"><span>Compromissos</span><strong id="committed">R$ 0,00</strong></article>
-          <article class="metric"><span>Patrimônio empresa</span><strong id="businessTotal">R$ 0,00</strong></article>
-        </div>
+            <div class="mp-quick-actions" aria-label="Ações rápidas">
+              <button type="button" id="quickIncomeBtn"><span>＋</span><b>Entrada</b><small>Venda ou recebimento</small></button>
+              <button type="button" id="quickExpenseBtn"><span>−</span><b>Saída</b><small>Gasto ou pagamento</small></button>
+              <button type="button" id="quickPurchaseHomeBtn"><span>▤</span><b>Compra</b><small>Por fornecedor</small></button>
+              <button type="button" id="quickTransferBtn"><span>⇄</span><b>Transferir</b><small>Entre suas contas</small></button>
+            </div>
 
-        <article class="protect-card">
-          <div class="protect-head"><div><span>PRECISO PROTEGER HOJE</span><strong id="protectTotal">R$ 0,00</strong></div><button id="showProtectionBtn" class="link-btn">ver cálculo</button></div>
-          <div class="protect-grid three">
-            <div><span>Operação</span><b id="protectBusiness">R$ 0,00</b></div>
-            <div><span>Dívidas obrigatórias</span><b id="protectDebt">R$ 0,00</b></div>
-            <div><span>Compras a prazo</span><b id="protectInventory">R$ 0,00</b></div>
+            <div class="mp-section-head"><div><h2>Suas contas</h2><p>Onde o dinheiro está agora.</p></div><button type="button" id="openAccountsOverviewBtn" class="mp-link">Ver tudo →</button></div>
+            <div id="accountOverview" class="account-strip mp-account-strip"></div>
+
+            <div class="mp-section-head"><div><h2>Lançamentos futuros</h2><p>Contas que realmente precisam ser cobertas.</p></div><button id="showProtectionBtn" class="mp-link">Ver cálculo →</button></div>
+            <article class="protect-card mp-protect-inline">
+              <div class="protect-head"><div><span>PRECISO PROTEGER HOJE</span><strong id="protectTotal">R$ 0,00</strong></div></div>
+              <div class="protect-grid three">
+                <div><span>Operação</span><b id="protectBusiness">R$ 0,00</b></div>
+                <div><span>Dívidas obrigatórias</span><b id="protectDebt">R$ 0,00</b></div>
+                <div><span>Compras a prazo</span><b id="protectInventory">R$ 0,00</b></div>
+              </div>
+            </article>
+            <div id="obligationPreview" class="stack mp-obligation-preview"></div>
+
+            <div class="mp-section-head"><div><h2>Extrato</h2><p>Últimos movimentos registrados.</p></div><button type="button" id="openMovementsHomeBtn" class="mp-link">Ver tudo →</button></div>
+            <div id="homeRecentTransactions" class="stack mp-home-extract"></div>
           </div>
-          <p class="muted small no-margin">Dívidas antigas e teto pessoal não geram reserva automática.</p>
-        </article>
 
-        <article id="personalMonthCard" class="personal-card clickable-card" role="button" tabindex="0" aria-label="Ver retiradas pessoais do mês">
-          <div class="row top"><div><span class="kicker">RETIRADAS PESSOAIS · MÊS</span><strong id="personalUsed">R$ 0,00</strong></div><div class="right"><span class="muted small">Teto fixo</span><b id="personalCeiling">R$ 0,00</b></div></div>
-          <div class="progress"><span id="personalProgress"></span></div>
-          <div class="subline"><span id="personalRemaining">Restante R$ 0,00</span><span id="pensionStatus">Pensão: R$ 0,00</span></div>
-          <p id="personalAlert" class="warning-text" hidden></p>
-        </article>
+          <aside class="mp-insights-column">
+            <div class="mp-analysis-title"><span>ANÁLISE DO MÊS</span><h2>Agosto</h2></div>
 
-        <div class="section-title compact-title"><span class="section-kicker">AGOSTO</span><h2>Movimento do mês</h2><p>Inclui o histórico informado e os lançamentos novos.</p></div>
-        <div class="grid three monthly-grid">
-          <article class="metric"><span>Faturamento informado</span><strong id="monthIncome">R$ 0,00</strong></article>
-          <article id="monthExpenseMetric" class="metric clickable-card" role="button" tabindex="0"><span>Pago / saiu no mês</span><strong id="monthExpense">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
-          <article class="metric"><span>Entrou - saiu</span><strong id="monthNet">R$ 0,00</strong></article>
+            <article class="mp-insight-card">
+              <div class="mp-card-head"><div><h3>Entradas e saídas</h3><button type="button" id="openAnalysisHomeBtn" class="mp-link">Analisar →</button></div></div>
+              <div class="mp-flow-mini">
+                <div class="mp-flow-chart" aria-hidden="true"><div class="mp-flow-axis"></div><div id="homeIncomeBar" class="mp-flow-column income"></div><div id="homeExpenseBar" class="mp-flow-column expense"></div></div>
+                <div class="mp-flow-values">
+                  <button type="button" id="monthIncomeMetric" class="mp-flow-value"><span>Entradas</span><strong id="monthIncome">R$ 0,00</strong></button>
+                  <button type="button" id="monthExpenseMetric" class="mp-flow-value"><span>Saídas</span><strong id="monthExpense">R$ 0,00</strong></button>
+                  <div class="mp-flow-value net"><span>Entrou - saiu</span><strong id="monthNet">R$ 0,00</strong></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="mp-insight-card">
+              <div class="mp-card-head"><div><h3>Saídas por categoria</h3><button type="button" id="openCategoryAnalysisHomeBtn" class="mp-link">Analisar →</button></div></div>
+              <div class="mp-home-donut-wrap">
+                <button type="button" id="homeCategoryDonut" class="mp-home-donut" aria-label="Ver saídas por categoria"><div><span>Total no mês</span><strong id="homeCategoryTotal">R$ 0,00</strong></div></button>
+                <div id="homeCategoryLegend" class="mp-home-category-legend"></div>
+              </div>
+            </article>
+
+            <article id="personalMonthCard" class="personal-card clickable-card mp-personal-card" role="button" tabindex="0" aria-label="Ver retiradas pessoais do mês">
+              <div class="row top"><div><span class="kicker">RETIRADAS PESSOAIS · MÊS</span><strong id="personalUsed">R$ 0,00</strong></div><div class="right"><span class="muted small">Teto fixo</span><b id="personalCeiling">R$ 0,00</b></div></div>
+              <div class="progress"><span id="personalProgress"></span></div>
+              <div class="subline"><span id="personalRemaining">Restante R$ 0,00</span><span id="pensionStatus">Pensão: R$ 0,00</span></div>
+              <p id="personalAlert" class="warning-text" hidden></p>
+            </article>
+
+            <div class="mp-today-grid">
+              <article id="todayIncomeMetric" class="metric clickable-card" role="button" tabindex="0"><span>Entrou hoje</span><strong id="todayIncome">R$ 0,00</strong><small class="tap-hint">detalhes</small></article>
+              <article id="todayExpenseMetric" class="metric clickable-card" role="button" tabindex="0"><span>Saiu hoje</span><strong id="todayExpense">R$ 0,00</strong><small class="tap-hint">detalhes</small></article>
+              <article id="todayPersonalMetric" class="metric clickable-card emphasis-click" role="button" tabindex="0"><span>Pessoal hoje</span><strong id="todayPersonal">R$ 0,00</strong><small class="tap-hint">detalhes</small></article>
+              <article class="metric"><span>Dinheiro físico</span><strong id="cashBalance">R$ 0,00</strong></article>
+            </div>
+          </aside>
         </div>
-
-        <div class="grid two">
-          <article id="todayIncomeMetric" class="metric clickable-card" role="button" tabindex="0"><span>Entrou hoje</span><strong id="todayIncome">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
-          <article id="todayExpenseMetric" class="metric clickable-card" role="button" tabindex="0"><span>Saiu hoje</span><strong id="todayExpense">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
-          <article id="todayPersonalMetric" class="metric clickable-card emphasis-click" role="button" tabindex="0"><span>Retirada pessoal hoje</span><strong id="todayPersonal">R$ 0,00</strong><small class="tap-hint">toque para ver do que se trata</small></article>
-          <article class="metric"><span>Dinheiro físico</span><strong id="cashBalance">R$ 0,00</strong></article>
-        </div>
-
-        <div class="section-title"><h2>Prioridades atuais</h2><p>Contas que realmente precisam ser cobertas.</p></div>
-        <div id="obligationPreview" class="stack"></div>
       </section>
 
       <section id="view-lancar" class="view">
@@ -223,7 +263,7 @@
           <article id="monthPersonalMetric" class="metric clickable-card" role="button" tabindex="0"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.5.0</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.6.0</strong></article>
         </div>
         <div class="section-title"><h2>Categorias</h2><p>Você pode criar categorias novas quando surgir qualquer tipo de gasto.</p></div>
         <button id="manageCategoriesSummaryBtn" class="btn secondary">Gerenciar categorias e subcategorias</button>
