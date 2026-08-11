@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.6.0" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.6.1" });
       }
 
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
@@ -718,7 +718,7 @@ async function executeWhatsAppCommand(db,input){
   let text=raw,date=null;const dm=text.match(/^\s*(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\s+/);if(dm){let y=dm[3]?Number(dm[3]):2026;if(y<100)y+=2000;date=`${y}-${String(Number(dm[2])).padStart(2,"0")}-${String(Number(dm[1])).padStart(2,"0")}`;optionalIsoDate(date);text=text.slice(dm[0].length);}
   const n=normalizeText(text);let direction=n.match(/^(entrou|recebi|vendi|venda)\b/)?"income":(n.match(/^(gasto|gastei|paguei|saida|saiu)\b/)?"expense":null);if(!direction)throw new Error("comece com GASTO/PAGUEI ou ENTROU/VENDI.");
   const amountMatch=text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/i);if(!amountMatch)throw new Error("não encontrei o valor.");const amount=parsePtMoneyToCents(amountMatch[1]);
-  const accounts=await listAccountsWithBalances(db);const account=findAccountAlias(accounts,n);const categories=(await db.prepare("SELECT id,name,nature,parent_id,active FROM categories WHERE active=1").all()).results;const cat=await findWhatsAppCategory(db,categories,n,direction);if(!cat)throw new Error("categoria não reconhecida. Escreva, por exemplo, mercado pessoal, marmita, combustível pessoal, água mineral, limpeza, vendas etc.");
+  const accounts=await listAccountsWithBalances(db);const account=findAccountAlias(accounts,n);const categories=(await db.prepare("SELECT id,name,nature,parent_id,active FROM categories WHERE active=1").all()).results;const cat=await findWhatsAppCategory(db,categories,n,direction,accounts);if(!cat)throw new Error("categoria não reconhecida. Use o nome da categoria ou subcategoria cadastrada no app.");
   let nature=direction==="income"?"income":cat.nature;let debtId=null,obligationId=null;
   if(direction==="expense"){const debts=await listDebts(db);const debt=debts.find(d=>normalizeText(n).includes(normalizeText(d.name))||normalizeText(n).includes(normalizeText(d.creditor||""))||(normalizeText(d.name).includes("chico")&&n.includes("chico")));if(debt){debtId=Number(debt.id);nature=debt.scope==="personal"?"personal_withdrawal":"business_debt";const debtCat=categories.find(c=>c.nature===nature);if(debtCat)cat.id=debtCat.id;}
     const obs=(await db.prepare("SELECT id,name,nature,active FROM obligations WHERE active=1").all()).results.find(o=>n.includes(normalizeText(o.name)));if(obs&&obs.nature===nature)obligationId=Number(obs.id);
@@ -732,16 +732,121 @@ async function executeWhatsAppCommand(db,input){
   const r=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,obligation_id,debt_id,description,notes,payment_method,recurrence_type,status,opening_history) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .bind(occurredAt,periodKey,direction,amount,source,destination,nature,cat.id,obligationId,debtId,description,"Lançado pelo WhatsApp",method,"eventual","posted",historical?1:0).run();
   if(debtId&&direction==="expense"&&!historical)await reduceDebt(db,debtId,amount);
-  const prefix=historical?"Histórico registrado sem alterar o saldo atual":"Registrado";return {reply:`${prefix}: ${direction==="income"?"entrada":"saída"} de ${formatCents(amount)}\n${cat.name}\n${account?`${direction==="income"?"Entrou em":"Saiu de"}: ${account.name}\n`:""}${date?`Data: ${date.split('-').reverse().join('/')}\n`:""}ID #${r.meta.last_row_id}`};
+  const parentCategory=cat.parent_id?categories.find(c=>Number(c.id)===Number(cat.parent_id)):null;const categoryLabel=parentCategory?`${parentCategory.name} → ${cat.name}`:cat.name;const prefix=historical?"Histórico registrado sem alterar o saldo atual":"Registrado";return {reply:`${prefix}: ${direction==="income"?"entrada":"saída"} de ${formatCents(amount)}\nCategoria: ${categoryLabel}\n${account?`${direction==="income"?"Entrou em":"Saiu de"}: ${account.name}\n`:""}${date?`Data: ${date.split('-').reverse().join('/')}\n`:""}ID #${r.meta.last_row_id}`};
 }
 
-async function findWhatsAppCategory(db,categories,n,direction){
-  if(direction==="income")return categories.find(c=>c.nature==="income"&&(normalizeText(c.name).includes("vendas")||normalizeText(c.name).includes("receita")))||categories.find(c=>c.nature==="income");
+function whatsappMatchText(value){
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+
+function whatsappComparableToken(value){
+  let token=String(value||"").trim();
+  if(token.length>4&&token.endsWith("s"))token=token.slice(0,-1);
+  return token;
+}
+
+function whatsappTokens(value){
+  const stop=new Set(["de","da","do","das","dos","e","em","para","por","com"]);
+  return whatsappMatchText(value)
+    .split(" ")
+    .map(whatsappComparableToken)
+    .filter(t=>t.length>=2&&!stop.has(t));
+}
+
+function escapeWhatsappRegex(value){
+  return String(value||"").replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+}
+
+function stripWhatsAppNonCategoryTokens(n,accounts=[]){
+  let clean=` ${whatsappMatchText(n)} `;
+  const phrases=[
+    ...(accounts||[]).map(a=>whatsappMatchText(a.name)),
+    "mercado pago","dinheiro fisico","dinheiro","nubank","caixa",
+    "pix","debito","credito","boleto","transferencia","transfer",
+    "gasto","gastei","paguei","saida","saiu","entrou","recebi","vendi","venda"
+  ].filter(Boolean).sort((a,b)=>b.length-a.length);
+
+  for(const phrase of phrases){
+    clean=clean.replace(new RegExp(`\\b${escapeWhatsappRegex(phrase)}\\b`,"g")," ");
+  }
+
+  clean=clean
+    .replace(/\br\s*\$/g," ")
+    .replace(/\b\d+(?:[.,]\d+)?\b/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+
+  return clean;
+}
+
+function whatsappCategoryScore(category,cleanText){
+  const name=whatsappMatchText(category?.name||"");
+  if(!name)return 0;
+  const padded=` ${cleanText} `;
+  if(padded.includes(` ${name} `))return 10000+name.length;
+
+  const catTokens=whatsappTokens(name);
+  const textTokens=whatsappTokens(cleanText);
+  if(!catTokens.length||!textTokens.length)return 0;
+
+  const allMatch=catTokens.every(ct=>textTokens.some(tt=>tt===ct));
+  if(allMatch)return 8000+(catTokens.length*100)+name.length;
+
+  if(catTokens.length===1&&textTokens.includes(catTokens[0]))return 6000+name.length;
+  return 0;
+}
+
+async function findWhatsAppCategory(db,categories,n,direction,accounts=[]){
+  if(direction==="income"){
+    return categories.find(c=>c.nature==="income"&&(normalizeText(c.name).includes("vendas")||normalizeText(c.name).includes("receita")))
+      ||categories.find(c=>c.nature==="income");
+  }
+
+  const clean=stripWhatsAppNonCategoryTokens(n,accounts);
+
+  const scored=categories
+    .map(c=>({category:c,score:whatsappCategoryScore(c,clean)}))
+    .filter(x=>x.score>0)
+    .sort((a,b)=>b.score-a.score || whatsappMatchText(b.category.name).length-whatsappMatchText(a.category.name).length);
+
+  if(scored.length)return {...scored[0].category};
+
   const aliases=[
-    ["agua mineral","Água mineral e consumo da loja"],["limpeza","Produtos de limpeza"],["marmita","Marmita"],["lanche","Lanche"],["mercado pessoal","Mercado pessoal"],["mercado","Mercado pessoal"],["combustivel pessoal","Combustível pessoal"],["gasolina pessoal","Combustível pessoal"],["gasolina loja","Combustível empresa"],["combustivel empresa","Combustível empresa"],["gasolina","Combustível pessoal"],["chatgpt","Sistemas e aplicativos"],["canva","Sistemas e aplicativos"],["vectorize","Sistemas e aplicativos"],["erp","Sistemas e aplicativos"],["pensao","Família e pensão"],["doacao","Doações"],["aluguel casa","Moradia"],["aluguel loja","Aluguel e ocupação"],["frete","Fretes e entregas"]
+    ["agua mineral","Água mineral e consumo da loja"],
+    ["limpeza","Produtos de limpeza"],
+    ["marmita","Marmita"],
+    ["lanche","Lanche"],
+    ["mercado pessoal","Mercado pessoal"],
+    ["mercado","Mercado pessoal"],
+    ["combustivel pessoal","Combustível pessoal"],
+    ["gasolina pessoal","Combustível pessoal"],
+    ["gasolina loja","Combustível empresa"],
+    ["combustivel empresa","Combustível empresa"],
+    ["gasolina","Combustível pessoal"],
+    ["chatgpt","Sistemas e aplicativos"],
+    ["canva","Sistemas e aplicativos"],
+    ["vectorize","Sistemas e aplicativos"],
+    ["erp","Sistemas e aplicativos"],
+    ["pensao","Família e pensão"],
+    ["doacao","Doações"],
+    ["aluguel casa","Moradia"],
+    ["aluguel loja","Aluguel e ocupação"],
+    ["frete","Fretes e entregas"]
   ];
-  for(const [alias,name] of aliases)if(n.includes(alias)){const c=categories.find(x=>normalizeText(x.name)===normalizeText(name));if(c)return {...c};}
-  const direct=[...categories].sort((a,b)=>normalizeText(b.name).length-normalizeText(a.name).length).find(c=>n.includes(normalizeText(c.name)));return direct?{...direct}:null;
+
+  const padded=` ${clean} `;
+  for(const [alias,name] of aliases){
+    const a=whatsappMatchText(alias);
+    if(padded.includes(` ${a} `)){
+      const c=categories.find(x=>normalizeText(x.name)===normalizeText(name));
+      if(c)return {...c};
+    }
+  }
+
+  return null;
 }
 
 function findAccountAlias(accounts,n){const aliases=[["mercado pago","Mercado Pago"],[" mp ","Mercado Pago"],["nubank","Nubank"],["dinheiro","Dinheiro físico"],["caixa","Dinheiro físico"]];for(const [alias,name] of aliases)if((` ${n} `).includes(alias.trim()==="mp"?" mp ":alias)){const a=accounts.find(x=>normalizeText(x.name)===normalizeText(name));if(a)return a;}return accounts.find(a=>n.includes(normalizeText(a.name)))||null;}

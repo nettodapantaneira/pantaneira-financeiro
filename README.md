@@ -105,3 +105,11 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - Novo endpoint privado `POST /api/internal/finance-command` para o Worker do chatbot encaminhar comandos do administrador.
 - O endpoint exige `FINANCE_BOT_SECRET` e valida o número em `WHATSAPP_ALLOWED_NUMBER`.
 - A integração recomendada usa Service Binding do bot para este Worker; o número do administrador não é migrado nem alterado no WhatsApp Business.
+
+
+## v1.6.1 — correção do interpretador WhatsApp
+- Separa conta e forma de pagamento antes de identificar a categoria.
+- Corrige conflito entre `Mercado Pago` e a categoria `Mercado pessoal`.
+- Reconhece categorias e subcategorias criadas no app por palavras equivalentes no singular/plural.
+- Exibe categoria principal → subcategoria na confirmação do WhatsApp.
+- Não exige migration nova.
