@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.0" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.1" });
       }
 
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
@@ -563,23 +563,35 @@ async function createPurchase(db,body){
   const p=await db.prepare(`INSERT INTO purchases(supplier_id,purchase_date,total_cents,paid_now_cents,payable_cents,source_account_id,payment_method,due_date,status,notes,nature,category_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`)
     .bind(supplierId,purchaseDate,total,paidNow,payable,source,method,dueDate,payable>0?(paidNow>0?"partial":"open"):"paid",nullable(body.notes),nature,categoryId).run();
   const purchaseId=p.meta.last_row_id; let transactionId=null,obligationId=null;
-  if(paidNow>0){
-    const tr=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,nature,category_id,description,notes,payment_method,recurrence_type,status,supplier_id,purchase_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(purchaseDate,periodKeyFromIso(purchaseDate),"expense",paidNow,source,nature,categoryId,`Compra - ${supplier?.name||"Fornecedor"}`,nullable(body.notes),method,"eventual","posted",supplierId,purchaseId).run();
-    transactionId=tr.meta.last_row_id;
+  try{
+    if(paidNow>0){
+      const tr=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,nature,category_id,description,notes,payment_method,recurrence_type,status,supplier_id,purchase_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .bind(purchaseDate,periodKeyFromIso(purchaseDate),"expense",paidNow,source,nature,categoryId,`Compra - ${supplier?.name||"Fornecedor"}`,nullable(body.notes),method,"eventual","posted",supplierId,purchaseId).run();
+      transactionId=tr.meta.last_row_id;
+    }
+    if(payable>0){
+      const dueDay=dueDate?Number(String(dueDate).slice(8,10)):null;
+      const countsInDailyTarget=dueDate?1:0;
+      const obligationNote=dueDate
+        ? `Gerado pela compra #${purchaseId}.`
+        : `Gerado pela compra #${purchaseId}. Vencimento ainda não informado; não entra na proteção diária até ser definido.`;
+      const o=await db.prepare(`INSERT INTO obligations(name,scope,nature,category_id,monthly_target_cents,due_day,due_date,recurring,flexible,priority,counts_in_daily_target,personal_ceiling_member,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .bind(`Compra a pagar - ${supplier?.name||"Fornecedor"}`,"business",nature,categoryId,payable,dueDay,dueDate,0,0,2,countsInDailyTarget,0,obligationNote).run();
+      obligationId=o.meta.last_row_id;
+    }
+    await db.prepare("UPDATE purchases SET transaction_id=?,obligation_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(transactionId,obligationId,purchaseId).run();
+    return {ok:true,id:purchaseId,transaction_id:transactionId,obligation_id:obligationId,payable_cents:payable};
+  }catch(error){
+    // Compensação: não deixa compra parcial/órfã caso uma etapa posterior falhe.
+    if(transactionId){
+      await db.prepare("DELETE FROM transactions WHERE id=? AND purchase_id=?").bind(transactionId,purchaseId).run().catch(()=>{});
+    }
+    if(obligationId){
+      await db.prepare("DELETE FROM obligations WHERE id=?").bind(obligationId).run().catch(()=>{});
+    }
+    await db.prepare("DELETE FROM purchases WHERE id=?").bind(purchaseId).run().catch(()=>{});
+    throw error;
   }
-  if(payable>0){
-    const dueDay=dueDate?Number(String(dueDate).slice(8,10)):null;
-    const countsInDailyTarget=dueDate?1:0;
-    const obligationNote=dueDate
-      ? `Gerado pela compra #${purchaseId}.`
-      : `Gerado pela compra #${purchaseId}. Vencimento ainda não informado; não entra na proteção diária até ser definido.`;
-    const o=await db.prepare(`INSERT INTO obligations(name,scope,nature,category_id,monthly_target_cents,due_day,due_date,recurring,flexible,priority,counts_in_daily_target,personal_ceiling_member,notes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(`Compra a pagar - ${supplier?.name||"Fornecedor"}`,"business",nature,categoryId,payable,dueDay,dueDate,0,0,2,countsInDailyTarget,0,obligationNote).run();
-    obligationId=o.meta.last_row_id;
-  }
-  await db.prepare("UPDATE purchases SET transaction_id=?,obligation_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(transactionId,obligationId,purchaseId).run();
-  return {ok:true,id:purchaseId,transaction_id:transactionId,obligation_id:obligationId,payable_cents:payable};
 }
 
 async function ensureSupplier(db,body){
@@ -868,6 +880,51 @@ function stripPurchaseControlPhrases(value,accounts=[]){
   return out.replace(/\s+/g," ").trim();
 }
 
+async function recoverRecentOrphanWhatsAppPurchase(db,{supplierName,total,account,method,inventoryCategory}){
+  const orphan=await db.prepare(`
+    SELECT p.id,p.purchase_date,p.supplier_id,p.payment_method,s.name supplier_name
+    FROM purchases p
+    JOIN suppliers s ON s.id=p.supplier_id
+    WHERE lower(s.name)=lower(?)
+      AND p.total_cents=?
+      AND p.paid_now_cents=?
+      AND p.payable_cents=0
+      AND p.source_account_id=?
+      AND p.transaction_id IS NULL
+      AND p.obligation_id IS NULL
+      AND p.notes='Compra lançada pelo WhatsApp'
+      AND datetime(p.created_at)>=datetime('now','-6 hours')
+    ORDER BY p.id DESC
+    LIMIT 1
+  `).bind(supplierName,total,total,account.id).first();
+
+  if(!orphan)return null;
+
+  const tr=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,nature,category_id,description,notes,payment_method,recurrence_type,status,supplier_id,purchase_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(
+      orphan.purchase_date,
+      periodKeyFromIso(orphan.purchase_date),
+      "expense",
+      total,
+      account.id,
+      "inventory",
+      inventoryCategory.id,
+      `Compra - ${orphan.supplier_name||supplierName}`,
+      "Compra lançada pelo WhatsApp · recuperação automática v1.7.1",
+      orphan.payment_method||method,
+      "eventual",
+      "posted",
+      orphan.supplier_id,
+      orphan.id
+    ).run();
+
+  const transactionId=tr.meta.last_row_id;
+  await db.prepare("UPDATE purchases SET transaction_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?")
+    .bind(transactionId,orphan.id).run();
+
+  return {ok:true,id:orphan.id,transaction_id:transactionId,obligation_id:null,payable_cents:0,recovered:true};
+}
+
 async function executeWhatsAppPurchaseCommand(db,text){
   const n=normalizeText(text);
   const amountMatch=text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/i);
@@ -893,18 +950,24 @@ async function executeWhatsAppPurchaseCommand(db,text){
 
   const method=n.includes("pix")?"pix":n.includes("dinheiro")?"cash":n.includes("debito")?"debit":n.includes("credito")?"credit":n.includes("boleto")?"boleto":n.includes("transfer")?"transfer":"other";
 
-  const result=await createPurchase(db,{
-    total_cents:total,
-    paid_now_cents:onCredit?0:total,
-    supplier_name:supplierName,
-    source_account_id:onCredit?null:account.id,
-    payment_method:onCredit?null:method,
-    due_date:onCredit?dueDate:null,
-    purchase_date:new Date().toISOString(),
-    nature:"inventory",
-    category_id:inventoryCategory.id,
-    notes:"Compra lançada pelo WhatsApp"
-  });
+  let result=null;
+  if(!onCredit){
+    result=await recoverRecentOrphanWhatsAppPurchase(db,{supplierName,total,account,method,inventoryCategory});
+  }
+  if(!result){
+    result=await createPurchase(db,{
+      total_cents:total,
+      paid_now_cents:onCredit?0:total,
+      supplier_name:supplierName,
+      source_account_id:onCredit?null:account.id,
+      payment_method:onCredit?null:method,
+      due_date:onCredit?dueDate:null,
+      purchase_date:new Date().toISOString(),
+      nature:"inventory",
+      category_id:inventoryCategory.id,
+      notes:"Compra lançada pelo WhatsApp"
+    });
+  }
 
   if(onCredit){
     return {reply:[
@@ -924,8 +987,9 @@ async function executeWhatsAppPurchaseCommand(db,text){
     `Fornecedor: ${supplierName}`,
     `Categoria: ${inventoryCategory.name}`,
     `Saiu de: ${account.name}`,
-    `Compra #${result.id} · Lançamento #${result.transaction_id}`
-  ].join("\n")};
+    `Compra #${result.id} · Lançamento #${result.transaction_id}`,
+    result.recovered?"Tentativa anterior recuperada; nenhuma compra duplicada foi criada.":null
+  ].filter(Boolean).join("\n")};
 }
 
 function buildOldReceiptDescription(text,amountText,accounts=[]){

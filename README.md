@@ -131,3 +131,11 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - Opcional: `... a prazo vence 20/08` já cria vencimento e entra na proteção diária.
 - Compra a prazo sem vencimento fica pendente de vencimento e não entra na proteção diária até ser ajustada.
 - Relatórios separam Faturamento informado de Recebimentos de vendas anteriores.
+
+
+## v1.7.1 — correção de compra via WhatsApp
+- Corrige `D1_ERROR: 13 values for 14 columns`.
+- O INSERT da transação de compra agora possui 14 placeholders para 14 colunas.
+- Adiciona compensação para não deixar compras órfãs em falhas futuras.
+- Ao repetir uma compra à vista que falhou na v1.7.0 nas últimas 6 horas, recupera a compra órfã em vez de criar outra.
+- Não exige migration nova.
