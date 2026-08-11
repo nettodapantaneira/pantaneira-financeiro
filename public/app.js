@@ -18,6 +18,7 @@ $('loginForm').addEventListener('submit',async e=>{e.preventDefault();try{await 
 function bindEvents(){
   document.querySelectorAll('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
   $('fab').addEventListener('click',()=>showView('lancar')); $('refreshBtn').addEventListener('click',loadAll); $('logoutBtn').addEventListener('click',logout);
+  $('openAccountsOverviewBtn')?.addEventListener('click',()=>showView('contas')); $('openHistoryBtn')?.addEventListener('click',()=>showView('antes')); $('backToMovementsBtn')?.addEventListener('click',()=>showView('lancar')); $('jumpPurchaseBtn')?.addEventListener('click',()=>{showView('lancar');setTimeout(()=>$('purchaseSection')?.scrollIntoView({behavior:'smooth',block:'start'}),80);});
   $('transactionForm').addEventListener('submit',saveTransaction); $('openingHistoryForm').addEventListener('submit',saveOpeningHistory); $('purchaseForm').addEventListener('submit',savePurchase); $('cashForm').addEventListener('submit',reconcileCash);
   $('showProtectionBtn').addEventListener('click',()=>$('protectionDialog').showModal()); $('closeProtection').addEventListener('click',()=>$('protectionDialog').close());
   document.querySelectorAll('#directionSelector button').forEach(b=>b.addEventListener('click',()=>setDirection(b.dataset.value))); document.querySelectorAll('#openingDirectionSelector button').forEach(b=>b.addEventListener('click',()=>setOpeningDirection(b.dataset.value)));
@@ -63,7 +64,7 @@ function renderAll(){
   $('monthIncome').textContent=money(d.month.income_cents); $('monthExpense').textContent=money(d.month.expense_cents); $('monthNet').textContent=money(d.month.net_cents); $('monthNet').classList.toggle('negative',d.month.net_cents<0); $('monthNet').classList.toggle('positive',d.month.net_cents>=0);
   $('monthIncomeReport').textContent=money(d.month.income_cents); $('monthExpenseReport').textContent=money(d.month.expense_cents);
   $('monthPersonal').textContent=money(d.month.personal_withdrawal_cents); $('monthInventory').textContent=money(d.month.inventory_spent_cents); $('monthDebt').textContent=money(d.month.debt_paid_cents); $('monthDebtReport').textContent=money(d.month.debt_paid_cents); $('oldDebtBalance').textContent=money(d.debt_summary.old_business_balance_cents);
-  renderPersonal(); renderObligations(); renderDebts(); renderTransactions(); renderOpeningTransactions(); renderAccounts(); renderProtection(); renderSelectors(); renderOpeningSelectors(); renderPurchases(); renderPurchaseCategory(); renderPurchaseSummary(); renderAnalysisDashboard();
+  renderPersonal(); renderObligations(); renderDebts(); renderTransactions(); renderOpeningTransactions(); renderAccounts(); renderAccountOverview(); renderProtection(); renderSelectors(); renderOpeningSelectors(); renderPurchases(); renderPurchaseCategory(); renderPurchaseSummary(); renderAnalysisDashboard();
 }
 
 function renderPersonal(){
@@ -124,6 +125,12 @@ function renderAccounts(){
   const business=state.accounts.filter(a=>a.owner_scope==='business');
   $('accountCards').innerHTML=business.map(a=>`<article class="list-card"><div class="row"><div><h3>${esc(a.name)}</h3><p>${accountType(a.account_type)}${Number(a.available_for_spending)===0?' · a compensar':''}</p></div><div class="right"><div class="money">${money(a.balance_cents)}</div>${Number(a.available_for_spending)===1&&a.account_type!=='cash'?`<button class="text-mini" data-reconcile-account="${a.id}">conciliar saldo</button>`:a.account_type==='cash'?'<span class="muted small">use Conferir dinheiro</span>':'<span class="muted small">aguardando compensação</span>'}</div></div></article>`).join('');
   document.querySelectorAll('[data-reconcile-account]').forEach(b=>b.addEventListener('click',()=>reconcileAccount(Number(b.dataset.reconcileAccount))));
+}
+
+function renderAccountOverview(){
+  const host=$('accountOverview');if(!host)return;const business=state.accounts.filter(a=>a.owner_scope==='business');
+  host.innerHTML=business.map(a=>{const pending=Number(a.available_for_spending)===0;const cls=a.account_type==='cash'?'cash':pending?'pending':'bank';return `<button type="button" class="account-mini ${cls}" data-account-overview="${a.id}"><span class="account-mini-icon">${a.account_type==='cash'?'R$':pending?'⌛':'●'}</span><span class="account-mini-copy"><small>${esc(a.name)}</small><strong>${money(a.balance_cents)}</strong><em>${pending?'a compensar':a.account_type==='cash'?'em dinheiro':'disponível'}</em></span></button>`;}).join('')||'<div class="notice muted">Nenhuma conta cadastrada.</div>';
+  host.querySelectorAll('[data-account-overview]').forEach(b=>b.addEventListener('click',()=>showView('contas')));
 }
 
 function renderPurchases(){
@@ -367,7 +374,7 @@ function detailTransactionCard(t){
 function categoryDisplayForTransaction(t){const c=state.categories.find(x=>Number(x.id)===Number(t.category_id));return c?categoryLabel(c):(t.parent_category_name?`${t.parent_category_name} › ${t.category_name||''}`:(t.category_name||labelNature(t.nature)));}
 function paymentMethodLabel(v){return ({pix:'Pix',cash:'Dinheiro',debit:'Débito',credit:'Crédito',transfer:'Transferência',boleto:'Boleto',other:'Outra / não informado'})[v]||'Não informado';}
 
-function showView(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===name));window.scrollTo({top:0,behavior:'smooth'});}
+function showView(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));const navName=name==='antes'?'lancar':name==='caixa'?'contas':name;document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===navName));window.scrollTo({top:0,behavior:'smooth'});}
 async function logout(){await api('/api/auth/logout',{method:'POST'});location.reload();}
 async function api(url,options={},auth=true){const r=await fetch(url,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});let data={};try{data=await r.json();}catch{}if(!r.ok){const e=new Error(data.error||`Erro ${r.status}`);e.status=r.status;throw e;}return data;}
 function parseMoney(v){const s=String(v??'').trim().replace(/\s/g,'');if(!s)throw new Error('Informe o valor.');let normalized=s;if(s.includes(','))normalized=s.replace(/\./g,'').replace(',','.');const n=Number(normalized);if(!Number.isFinite(n)||n<0)throw new Error('Valor inválido.');return Math.round(n*100);}

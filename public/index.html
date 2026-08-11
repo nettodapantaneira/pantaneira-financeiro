@@ -29,19 +29,23 @@
 
   <div id="app" hidden>
     <header class="topbar">
-      <div><div class="eyebrow">PANTANEIRA</div><strong>Financeiro</strong></div>
+      <div class="topbar-brand"><div class="brand-mini">P</div><div><div class="eyebrow">PANTANEIRA</div><strong>Financeiro</strong></div></div>
       <button id="refreshBtn" class="icon-btn" aria-label="Atualizar">↻</button>
     </header>
 
     <main>
       <section id="view-hoje" class="view active">
+        <div class="page-heading"><div><span class="page-kicker">VISÃO DO CAIXA</span><h1>Hoje</h1><p>O que está disponível, o que já tem destino e onde o dinheiro está.</p></div></div>
         <div class="hero-card">
           <span>PODE USAR</span>
           <strong id="freeMoney">R$ 0,00</strong>
           <small>disponível imediato menos compromissos rígidos já assumidos</small>
         </div>
 
-        <div class="grid two">
+        <div class="home-section-head"><div><span>SUAS CONTAS</span><strong>Saldo por origem</strong></div><button type="button" id="openAccountsOverviewBtn" class="link-action">ver contas →</button></div>
+        <div id="accountOverview" class="account-strip"></div>
+
+        <div class="grid two balance-grid">
           <article class="metric"><span>Disponível imediato</span><strong id="businessBalance">R$ 0,00</strong></article>
           <article class="metric"><span>A compensar</span><strong id="pendingBalance">R$ 0,00</strong></article>
           <article class="metric"><span>Compromissos</span><strong id="committed">R$ 0,00</strong></article>
@@ -65,7 +69,7 @@
           <p id="personalAlert" class="warning-text" hidden></p>
         </article>
 
-        <div class="section-title compact-title"><h2>Movimento do mês</h2><p>Inclui o histórico que você informar de julho e 01 a 10/08.</p></div>
+        <div class="section-title compact-title"><span class="section-kicker">AGOSTO</span><h2>Movimento do mês</h2><p>Inclui o histórico informado e os lançamentos novos.</p></div>
         <div class="grid three monthly-grid">
           <article class="metric"><span>Faturamento informado</span><strong id="monthIncome">R$ 0,00</strong></article>
           <article id="monthExpenseMetric" class="metric clickable-card" role="button" tabindex="0"><span>Pago / saiu no mês</span><strong id="monthExpense">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
@@ -84,6 +88,8 @@
       </section>
 
       <section id="view-lancar" class="view">
+        <div class="page-heading"><div><span class="page-kicker">MOVIMENTOS</span><h1>Lançar</h1><p>Registre o que entrou, o que saiu e as compras da empresa.</p></div></div>
+        <div class="quick-tools"><button type="button" id="openHistoryBtn" class="quick-tool"><span>↶</span><div><strong>Histórico</strong><small>Julho e 01–10/08</small></div></button><button type="button" id="jumpPurchaseBtn" class="quick-tool"><span>▤</span><div><strong>Compra</strong><small>Por fornecedor</small></div></button></div>
         <div class="section-title"><h2>Novo lançamento</h2><p>Registre o gasto e de onde o dinheiro saiu.</p></div>
         <form id="transactionForm" class="form-card">
           <div class="segmented" id="directionSelector">
@@ -117,7 +123,7 @@
           <button class="btn primary" type="submit">Salvar lançamento</button>
         </form>
 
-        <div class="section-title"><h2>Compra por fornecedor</h2><p>Mercadoria, insumo ou despesa operacional comprada de fornecedor. À vista ou a prazo.</p></div>
+        <div id="purchaseSection" class="section-title"><h2>Compra por fornecedor</h2><p>Mercadoria, insumo ou despesa operacional comprada de fornecedor. À vista ou a prazo.</p></div>
         <form id="purchaseForm" class="form-card">
           <label>Tipo da compra</label>
           <select id="purchaseNature"><option value="inventory">Mercadoria / estoque / insumo</option><option value="business_operating">Despesa da operação da loja</option></select>
@@ -138,7 +144,9 @@
       </section>
 
       <section id="view-antes" class="view">
-        <div class="section-title"><h2>Histórico anterior · julho e 01 a 10/08</h2><p>Reconstrua julho inteiro e os primeiros dias de agosto. Entra nos relatórios do mês escolhido, mas NÃO altera os saldos atuais.</p></div>
+        <button type="button" id="backToMovementsBtn" class="back-link">← Voltar aos movimentos</button>
+        <div class="page-heading"><div><span class="page-kicker">HISTÓRICO</span><h1>Julho e início de agosto</h1><p>Reconstrua o período anterior sem alterar os saldos atuais.</p></div></div>
+        <div class="section-title"><h2>Lançar histórico</h2><p>Todo julho e os primeiros 10 dias de agosto entram nas análises mensais.</p></div>
         <div class="notice warning"><b>Use para fatos anteriores à fotografia dos saldos de 10/08.</b><br>Você pode lançar todo julho e 01 a 10/08: despesas, retiradas pessoais, contas pagas e faturamento.</div>
         <form id="openingHistoryForm" class="form-card top-gap">
           <div class="segmented two-segment" id="openingDirectionSelector">
@@ -170,7 +178,17 @@
       </section>
 
       <section id="view-contas" class="view">
-        <div class="section-title"><h2>Contas e compromissos</h2><p>Correntes, pessoais fixos e compras a prazo. Use “Já pago antes do app” para despesas quitadas antes da fotografia inicial: elas reduzem o compromisso sem descontar novamente os saldos atuais.</p></div>
+        <div class="page-heading"><div><span class="page-kicker">CONTAS</span><h1>Dinheiro e compromissos</h1><p>Veja onde o dinheiro está e o que ainda precisa ser pago.</p></div></div>
+        <div class="section-title"><h2>Saldos e contas</h2><p>Mercado Pago, Nubank, dinheiro físico e valores a compensar.</p></div>
+        <div id="accountCards" class="stack account-list"></div>
+        <div class="section-title"><h2>Conferir dinheiro físico</h2><p>Compare o saldo do app com o dinheiro contado em mãos.</p></div>
+        <article class="hero-card small-hero cash-hero"><span>SALDO ESPERADO EM DINHEIRO</span><strong id="cashExpected">R$ 0,00</strong></article>
+        <form id="cashForm" class="form-card compact-cash-form">
+          <label>Quanto você contou agora?</label><input id="cashActual" inputmode="decimal" placeholder="0,00" required />
+          <button class="btn primary" type="submit">Conferir dinheiro</button>
+        </form>
+        <div id="cashResult" class="notice" hidden></div>
+        <div class="section-title"><h2>Contas e compromissos</h2><p>Correntes, pessoais fixos e compras a prazo. Use “Já pago antes do app” para despesas quitadas antes da fotografia inicial.</p></div>
         <button id="newObligationBtn" class="btn secondary">+ Cadastrar conta</button>
         <div id="obligationsList" class="stack spaced"></div>
       </section>
@@ -185,21 +203,9 @@
         <div id="debtsList" class="stack spaced"></div>
       </section>
 
-      <section id="view-caixa" class="view">
-        <div class="section-title"><h2>Caixa e contas</h2><p>Mercado Pago, Nubank, dinheiro e cheque em mãos separados.</p></div>
-        <div id="accountCards" class="stack"></div>
-        <div class="section-title"><h2>Conferir dinheiro físico</h2></div>
-        <article class="hero-card small-hero"><span>SALDO ESPERADO EM DINHEIRO</span><strong id="cashExpected">R$ 0,00</strong></article>
-        <form id="cashForm" class="form-card">
-          <label>Quanto você contou agora?</label><input id="cashActual" inputmode="decimal" placeholder="0,00" required />
-          <button class="btn primary" type="submit">Conferir dinheiro</button>
-        </form>
-        <div id="cashResult" class="notice" hidden></div>
-      </section>
-
       <section id="view-relatorios" class="view">
         <div class="analysis-shell">
-          <div class="section-title analysis-title"><h2>Análise do mês</h2><p>Entradas, saídas e para onde o dinheiro foi.</p></div>
+          <div class="page-heading analysis-heading"><div><span class="page-kicker">ANÁLISES</span><h1>Seu dinheiro no mês</h1><p>Entradas, saídas e para onde o dinheiro foi.</p></div></div>
           <div class="form-card compact-form analysis-period-card"><label>Mês da análise</label><select id="analysisPeriod"></select></div>
           <article class="analysis-card">
             <div class="row top"><div><h3>Entradas e saídas</h3><span class="muted small">Fluxo informado no mês</span></div><div id="analysisNetBadge" class="analysis-badge">R$ 0,00</div></div>
@@ -217,7 +223,7 @@
           <article id="monthPersonalMetric" class="metric clickable-card" role="button" tabindex="0"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.4.0</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.5.0</strong></article>
         </div>
         <div class="section-title"><h2>Categorias</h2><p>Você pode criar categorias novas quando surgir qualquer tipo de gasto.</p></div>
         <button id="manageCategoriesSummaryBtn" class="btn secondary">Gerenciar categorias e subcategorias</button>
@@ -230,12 +236,10 @@
     <button id="fab" class="fab" aria-label="Novo lançamento">+</button>
     <nav class="bottom-nav">
       <button data-view="hoje" class="active"><span>⌂</span><small>Hoje</small></button>
-      <button data-view="lancar"><span>＋</span><small>Lançar</small></button>
-      <button data-view="antes"><span>↶</span><small>Histórico</small></button>
+      <button data-view="lancar"><span>＋</span><small>Movimentos</small></button>
       <button data-view="contas"><span>▣</span><small>Contas</small></button>
       <button data-view="dividas"><span>↘</span><small>Dívidas</small></button>
-      <button data-view="caixa"><span>R$</span><small>Caixa</small></button>
-      <button data-view="relatorios"><span>≡</span><small>Resumo</small></button>
+      <button data-view="relatorios"><span>◔</span><small>Análises</small></button>
     </nav>
   </div>
 
