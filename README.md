@@ -113,3 +113,11 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - Reconhece categorias e subcategorias criadas no app por palavras equivalentes no singular/plural.
 - Exibe categoria principal → subcategoria na confirmação do WhatsApp.
 - Não exige migration nova.
+
+
+## v1.6.2 — persistência da autorização WhatsApp
+- `WHATSAPP_ALLOWED_NUMBER=5566999767860` passou a fazer parte do `wrangler.jsonc`.
+- Evita que deploys via GitHub/Wrangler removam a autorização do 7860.
+- `FINANCE_BOT_SECRET` continua como Secret no Cloudflare e não é incluído no repositório.
+- Mantém a correção v1.6.1 do parser de categorias/contas.
+- Não exige migration nova.

@@ -18,6 +18,7 @@
   ],
   "vars": {
     "APP_NAME": "Pantaneira Financeiro",
-    "APP_VERSION": "1.6.1"
+    "APP_VERSION": "1.6.2",
+    "WHATSAPP_ALLOWED_NUMBER": "5566999767860"
   }
 }
