@@ -134,7 +134,7 @@ function isFinanceAdminCommand(value) {
 Mensagens comuns do administrador como `oi`, `menu` etc. continuam no fluxo normal do bot porque não correspondem a comandos financeiros.
 
 
-## Atualização v1.7.2
+## Atualização v1.7.3
 
 Comandos adicionais/corrigidos:
 - `transfere 27 mercado pago para nubank pix`

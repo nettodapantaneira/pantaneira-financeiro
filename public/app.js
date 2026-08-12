@@ -90,7 +90,12 @@ function renderObligations(){
 
 function obligationCard(o,compact){
   const target=Number(o.monthly_target_cents||0),paid=Number(o.paid_cents||0),reserved=Number(o.reserved_cents||0),remaining=Number(o.remaining_cents||0); const covered=Math.max(Number(o.reserved_total_cents||0),paid);
-  const labels=[]; if(o.due_date)labels.push(`vence ${dateBR(o.due_date)}`); else if(o.due_day)labels.push(`vence dia ${o.due_day}`); if(o.overdue)labels.push('ATRASADA'); if(o.personal_ceiling_member)labels.push('teto pessoal'); if(!o.counts_in_daily_target)labels.push('sem reserva automática');
+  const labels=[];
+  if(o.target_period_key)labels.push(`referência ${periodLabelClient(o.target_period_key)}`);
+  if(o.due_date)labels.push(`vence ${dateBR(o.due_date)}`); else if(o.due_day&&o.target_period_key)labels.push(`vence ${dateBR(dueDateForPeriodClient(o.target_period_key,o.due_day))}`); else if(o.due_day)labels.push(`vence dia ${o.due_day}`);
+  const currentKey=state.dashboard?.period_key; const rolled=Boolean(currentKey&&o.target_period_key&&o.target_period_key!==currentKey);
+  if(rolled&&Number(o.paid_current_cents||0)>=target&&target>0)labels.push(`${periodLabelClient(currentKey)} quitado`);
+  if(o.overdue)labels.push('ATRASADA'); if(o.personal_ceiling_member)labels.push('teto pessoal'); if(!o.counts_in_daily_target)labels.push('sem reserva automática');
   return `<article class="list-card ${o.overdue?'overdue':''}"><div class="row top"><div><h3>${esc(o.name)}</h3><p>${labelNature(o.nature)}${labels.length?' · '+labels.join(' · '):''}</p></div><div class="money">${money(target)}</div></div>
     ${target>0?`<div class="progress"><span style="width:${pct(covered,target)}%"></span></div><div class="subline"><span>${paid?`Pago ${money(paid)}`:'Pago R$ 0,00'}${reserved?` · reservado ${money(reserved)}`:''}</span><span>Falta ${money(remaining)}</span></div>`:''}
     ${compact?'':`<div class="actions"><button class="mini-btn" data-pay-obligation="${o.id}">Pagar agora</button>${remaining>0?`<button class="mini-btn" data-opening-paid="${o.id}">Já pago antes do app</button>`:''}${o.counts_in_daily_target?`<button class="mini-btn" data-reserve="${o.id}">+ Reservar</button>`:''}<button class="mini-btn" data-edit-obligation="${o.id}">Editar</button></div>`}</article>`;
@@ -141,7 +146,7 @@ function renderPurchases(){
 }
 
 function renderProtection(){
-  const items=state.dashboard.daily_protection.items; $('protectionItems').innerHTML=items.map(i=>`<article class="list-card ${i.overdue?'overdue':''}"><div class="row top"><div><h3>${esc(i.name)}</h3><p>${i.overdue?'Atrasada · ':''}${i.days_remaining} dia(s) de operação para cobrir</p></div><div class="money">${money(i.daily_cents)}/dia</div></div><div class="subline"><span>Falta ${money(i.remaining_cents)}</span><span>${labelNature(i.nature)}</span></div></article>`).join('')||empty('Nada para proteger automaticamente hoje.');
+  const items=state.dashboard.daily_protection.items; $('protectionItems').innerHTML=items.map(i=>{const ref=i.target_period_key?`Referência ${periodLabelClient(i.target_period_key)} · `:'';const due=i.effective_due_date?`vence ${dateBR(i.effective_due_date)} · `:'';return `<article class="list-card ${i.overdue?'overdue':''}"><div class="row top"><div><h3>${esc(i.name)}</h3><p>${i.overdue?'Atrasada · ':''}${ref}${due}${i.days_remaining} dia(s) de operação para cobrir</p></div><div class="money">${money(i.daily_cents)}/dia</div></div><div class="subline"><span>Falta ${money(i.remaining_cents)}</span><span>${labelNature(i.nature)}</span></div></article>`;}).join('')||empty('Nada para reservar automaticamente hoje.');
 }
 
 function renderSelectors(){
@@ -413,6 +418,7 @@ function centsToInput(c){return (Number(c||0)/100).toFixed(2).replace('.',',');}
 function numOrNull(v){return v?Number(v):null;}
 function labelNature(n){return ({business_operating:'Empresa · operação',inventory:'Compra/estoque',business_debt:'Dívida empresa',personal_withdrawal:'Retirada pessoal',income:'Receita',transfer:'Transferência',unidentified:'Não identificado'})[n]||n;}
 function accountType(t){return ({bank:'Conta bancária',cash:'Dinheiro físico',card:'Cartão',other:'Outro ativo'})[t]||t;}
+function dueDateForPeriodClient(key,dueDay){const [y,m]=String(key).split('-').map(Number);const last=new Date(Date.UTC(y,m,0)).getUTCDate();const day=Math.min(Number(dueDay||1),last);return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;}
 function dateTimeBR(v){return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Cuiaba',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(v));}
 function dateBR(v){const s=String(v).slice(0,10);const [y,m,d]=s.split('-');return d&&m&&y?`${d}/${m}/${y}`:s;}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}

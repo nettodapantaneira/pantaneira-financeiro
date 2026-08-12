@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.2" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.3" });
       }
 
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
@@ -663,7 +663,7 @@ function calculateDailyProtection(obligations,now){
     else if(o.due_day)due=dueDateForPeriod(o.target_period_key,Number(o.due_day));
     else due=endOfPeriodDate(o.target_period_key);
     let days=Math.max(1,countWorkingDaysInclusive(now,due));
-    const daily=Math.ceil(remaining/days); const item={id:o.id,name:o.name,remaining_cents:remaining,daily_cents:daily,days_remaining:days,nature:o.nature,flexible:Boolean(o.flexible),priority:o.priority,overdue:Boolean(o.overdue),due_date:o.due_date||null,due_day:o.due_day||null}; items.push(item);
+    const daily=Math.ceil(remaining/days); const item={id:o.id,name:o.name,remaining_cents:remaining,daily_cents:daily,days_remaining:days,nature:o.nature,flexible:Boolean(o.flexible),priority:o.priority,overdue:Boolean(o.overdue),due_date:o.due_date||null,due_day:o.due_day||null,target_period_key:o.target_period_key||null,effective_due_date:due.toISOString().slice(0,10)}; items.push(item);
     if(o.flexible)groups.flexible_cents+=daily;
     if(o.nature==="business_operating")groups.business_cents+=daily; else if(o.nature==="business_debt")groups.debt_cents+=daily; else if(o.nature==="inventory")groups.inventory_cents+=daily;
     groups.total_cents+=daily;
@@ -757,7 +757,7 @@ async function executeWhatsAppCommand(db,input){
   if(norm==="saldo"||norm.startsWith("saldo ")){
     const d=await buildDashboard(db);
     const acc=d.accounts.filter(a=>a.owner_scope==="business").map(a=>`${a.name}: ${formatCents(a.balance_cents)}${Number(a.available_for_spending)===0?" (a compensar)":""}`).join("\n");
-    return {reply:`SALDOS\n${acc}\n\nPode usar: ${formatCents(d.balances.free_strict_cents)}\nCompromissos: ${formatCents(d.balances.committed_strict_cents)}`};
+    return {reply:`SALDOS\n${acc}\n\nPode usar: ${formatCents(d.balances.free_strict_cents)}\nCompromissos a cobrir: ${formatCents(d.balances.committed_strict_cents)}`};
   }
 
   if(norm.startsWith("resumo")){
@@ -916,7 +916,7 @@ async function recoverRecentOrphanWhatsAppPurchase(db,{supplierName,total,accoun
       "inventory",
       inventoryCategory.id,
       `Compra - ${orphan.supplier_name||supplierName}`,
-      "Compra lançada pelo WhatsApp · recuperação automática v1.7.2",
+      "Compra lançada pelo WhatsApp · recuperação automática v1.7.3",
       orphan.payment_method||method,
       "eventual",
       "posted",

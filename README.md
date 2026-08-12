@@ -1,5 +1,15 @@
 # Pantaneira Financeiro v1.0.2
 
+## v1.7.3 — clareza de compromissos recorrentes
+
+- Mantém o vínculo automático de pagamentos via WhatsApp com compromissos quando o nome/natureza correspondem.
+- Deixa explícita a competência do compromisso (ex.: setembro de 2026) e o vencimento efetivo.
+- Quando o mês atual já foi quitado e a obrigação recorrente avançou para o próximo ciclo, mostra o mês quitado no card.
+- Renomeia “Preciso proteger hoje” para “Precisa reservar” e “Cálculo da proteção diária” para “Cálculo da reserva diária”.
+- Não altera saldos, lançamentos ou regras financeiras; é uma atualização de clareza operacional.
+- Sem nova migration.
+
+
 MVP financeiro independente para controle diário da Pantaneira.
 
 ## O que já existe
@@ -141,7 +151,7 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - Não exige migration nova.
 
 
-## v1.7.2 — hotfix de valores do WhatsApp e transferência entre contas
+## v1.7.3 — hotfix de valores do WhatsApp e transferência entre contas
 
 - Corrige o parser de valores que truncava quantias com quatro ou mais dígitos (`3500` virava `350`).
 - Aceita corretamente formatos como `3500`, `3.500`, `3500,00`, `3500.00`, `2835,00`, `2835.00` e `3.500,00`.
