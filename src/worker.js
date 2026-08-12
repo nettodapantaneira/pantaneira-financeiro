@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.3" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.4" });
       }
 
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
@@ -394,11 +394,20 @@ async function buildDashboard(db){
       if(a.account_type==="cash")cash+=b;
     }
   }
+  const currentKey=periodKeyLocal(now);
   const target=obligations.filter(o=>o.active&&o.counts_in_daily_target);
-  const strictTarget=target.filter(o=>!o.flexible);
-  const committedStrict=strictTarget.reduce((s,o)=>s+Math.max(0,Number(o.remaining_cents||0)),0);
-  const committedFlexible=target.filter(o=>o.flexible).reduce((s,o)=>s+Math.max(0,Number(o.remaining_cents||0)),0);
-  const daily=calculateDailyProtection(target,now);
+  // v1.7.4 — separa obrigação do mês atual/atrasada de compromissos de ciclos futuros.
+  // Isso evita transformar uma reserva para setembro em "rombo" de agosto.
+  const currentTarget=target.filter(o=>String(o.target_period_key||currentKey)<=currentKey);
+  const futureTarget=target.filter(o=>String(o.target_period_key||currentKey)>currentKey);
+  const currentStrictTarget=currentTarget.filter(o=>!o.flexible);
+  const futureStrictTarget=futureTarget.filter(o=>!o.flexible);
+  const committedStrict=currentStrictTarget.reduce((sum,o)=>sum+Math.max(0,Number(o.remaining_cents||0)),0);
+  const committedFlexible=currentTarget.filter(o=>o.flexible).reduce((sum,o)=>sum+Math.max(0,Number(o.remaining_cents||0)),0);
+  const futureCommittedStrict=futureStrictTarget.reduce((sum,o)=>sum+Math.max(0,Number(o.remaining_cents||0)),0);
+  const futureCommittedFlexible=futureTarget.filter(o=>o.flexible).reduce((sum,o)=>sum+Math.max(0,Number(o.remaining_cents||0)),0);
+  // O rateio diário do painel passa a olhar somente ciclos futuros.
+  const daily=calculateDailyProtection(futureTarget,now);
   const {start,end}=localDayUtcRange(now); const {monthStart,nextMonth}=localMonthUtcRange(now);
   const today=await db.prepare(`SELECT
     COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' THEN t.amount_cents ELSE 0 END),0) income_cents,
@@ -437,8 +446,31 @@ async function buildDashboard(db){
   const purchases=await listPurchases(db,5);
 
   return {
-    as_of:now.toISOString(),period_key:periodKeyLocal(now),
-    balances:{all_cents:all,business_cents:businessAvailable,business_total_cents:businessTotal,pending_business_cents:pendingBusiness,cash_cents:cash,committed_strict_cents:committedStrict,committed_flexible_cents:committedFlexible,free_strict_cents:businessAvailable-committedStrict},
+    as_of:now.toISOString(),period_key:currentKey,
+    balances:{
+      all_cents:all,
+      business_cents:businessAvailable,
+      business_total_cents:businessTotal,
+      pending_business_cents:pendingBusiness,
+      cash_cents:cash,
+      // Compatibilidade: estes campos agora representam somente o que está vencido ou pertence ao mês atual.
+      committed_strict_cents:committedStrict,
+      committed_flexible_cents:committedFlexible,
+      free_strict_cents:businessAvailable-committedStrict,
+      future_committed_strict_cents:futureCommittedStrict,
+      future_committed_flexible_cents:futureCommittedFlexible
+    },
+    cash_horizon:{
+      current_period_key:currentKey,
+      current_commitments_cents:committedStrict,
+      current_flexible_cents:committedFlexible,
+      current_free_cents:businessAvailable-committedStrict,
+      current_items_count:currentTarget.filter(o=>Number(o.remaining_cents||0)>0).length,
+      future_commitments_cents:futureCommittedStrict,
+      future_flexible_cents:futureCommittedFlexible,
+      future_daily_reserve_cents:Number(daily.total_cents||0),
+      future_items_count:futureTarget.filter(o=>Number(o.remaining_cents||0)>0).length
+    },
     daily_protection:daily,
     today:{income_cents:Number(today?.income_cents||0),sales_cents:Number(today?.sales_cents||0),old_receipts_cents:Number(today?.old_receipts_cents||0),expense_cents:Number(today?.expense_cents||0),personal_withdrawal_cents:Number(today?.personal_cents||0)},
     month:{income_cents:Number(month?.income_cents||0),sales_cents:Number(month?.sales_cents||0),old_receipts_cents:Number(month?.old_receipts_cents||0),expense_cents:Number(month?.expense_cents||0),net_cents:Number(month?.income_cents||0)-Number(month?.expense_cents||0),opening_income_cents:Number(month?.opening_income_cents||0),opening_expense_cents:Number(month?.opening_expense_cents||0),personal_withdrawal_cents:personalUsed,debt_paid_cents:Number(month?.debt_paid_cents||0),inventory_spent_cents:Number(month?.inventory_cents||0)},
@@ -757,7 +789,7 @@ async function executeWhatsAppCommand(db,input){
   if(norm==="saldo"||norm.startsWith("saldo ")){
     const d=await buildDashboard(db);
     const acc=d.accounts.filter(a=>a.owner_scope==="business").map(a=>`${a.name}: ${formatCents(a.balance_cents)}${Number(a.available_for_spending)===0?" (a compensar)":""}`).join("\n");
-    return {reply:`SALDOS\n${acc}\n\nPode usar: ${formatCents(d.balances.free_strict_cents)}\nCompromissos a cobrir: ${formatCents(d.balances.committed_strict_cents)}`};
+    return {reply:`SALDOS\n${acc}\n\nSaldo livre do mês: ${formatCents(d.balances.free_strict_cents)}\nA cobrir no mês: ${formatCents(d.balances.committed_strict_cents)}\nPróximos compromissos: ${formatCents(d.balances.future_committed_strict_cents||0)}\nReserva futura sugerida: ${formatCents(d.daily_protection.total_cents||0)}/dia`};
   }
 
   if(norm.startsWith("resumo")){
@@ -916,7 +948,7 @@ async function recoverRecentOrphanWhatsAppPurchase(db,{supplierName,total,accoun
       "inventory",
       inventoryCategory.id,
       `Compra - ${orphan.supplier_name||supplierName}`,
-      "Compra lançada pelo WhatsApp · recuperação automática v1.7.3",
+      "Compra lançada pelo WhatsApp · recuperação automática v1.7.4",
       orphan.payment_method||method,
       "eventual",
       "posted",

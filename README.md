@@ -1,3 +1,15 @@
+# Pantaneira Financeiro
+
+## v1.7.4 — mês atual separado da reserva futura
+
+- O painel não mistura mais compromissos do mês atual com obrigações de meses seguintes no mesmo número negativo.
+- O topo agora mostra **Dinheiro disponível agora**, **mês atual · a cobrir**, **saldo livre do mês**, **próximos compromissos** e **reserva sugerida por dia** em blocos separados.
+- `Saldo livre do mês` desconta somente obrigações vencidas ou pertencentes ao mês atual.
+- Compromissos de ciclos futuros aparecem como planejamento/reserva, não como rombo do caixa atual.
+- O card de reserva diária e seu detalhamento passam a considerar somente ciclos futuros.
+- O comando `saldo` do WhatsApp passa a separar `A cobrir no mês`, `Próximos compromissos` e `Reserva futura sugerida`.
+- Sem migration nova e sem alteração de saldos, lançamentos ou obrigações existentes.
+
 # Pantaneira Financeiro v1.0.2
 
 ## v1.7.3 — clareza de compromissos recorrentes

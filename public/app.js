@@ -60,9 +60,18 @@ async function loadAll(){
 
 function renderAll(){
   const d=state.dashboard;
-  $('freeMoney').textContent=money(d.balances.free_strict_cents); $('freeMoney').classList.toggle('negative',d.balances.free_strict_cents<0);
-  $('businessBalance').textContent=money(d.balances.business_cents); $('pendingBalance').textContent=money(d.balances.pending_business_cents); $('businessTotal').textContent=money(d.balances.business_total_cents); $('committed').textContent=money(d.balances.committed_strict_cents);
-  $('protectTotal').textContent=money(d.daily_protection.total_cents); $('protectBusiness').textContent=money(d.daily_protection.business_cents); $('protectDebt').textContent=money(d.daily_protection.debt_cents); $('protectInventory').textContent=money(d.daily_protection.inventory_cents);
+  const horizon=d.cash_horizon||{};
+  const currentFree=Number(horizon.current_free_cents??d.balances.free_strict_cents??0);
+  const currentCommitted=Number(horizon.current_commitments_cents??d.balances.committed_strict_cents??0);
+  const futureCommitted=Number(horizon.future_commitments_cents??d.balances.future_committed_strict_cents??0);
+  const futureDaily=Number(horizon.future_daily_reserve_cents??d.daily_protection.total_cents??0);
+  $('freeMoney').textContent=money(currentFree); $('freeMoney').classList.toggle('negative',currentFree<0); $('freeMoney').classList.toggle('positive',currentFree>=0);
+  $('businessBalance').textContent=money(d.balances.business_cents); $('pendingBalance').textContent=money(d.balances.pending_business_cents); $('businessTotal').textContent=money(d.balances.business_total_cents); $('committed').textContent=money(currentCommitted);
+  if($('futureCommitted'))$('futureCommitted').textContent=money(futureCommitted);
+  if($('futureReserveDaily'))$('futureReserveDaily').textContent=`${money(futureDaily)}/dia`;
+  if($('currentPeriodLabel'))$('currentPeriodLabel').textContent=`${periodLabelClient(d.period_key).toUpperCase()} · A COBRIR`;
+  if($('futurePeriodLabel'))$('futurePeriodLabel').textContent=futureCommitted>0?'meses seguintes · ainda não vencidos':'nenhum compromisso futuro pendente';
+  $('protectTotal').textContent=`${money(futureDaily)}/dia`; $('protectBusiness').textContent=money(d.daily_protection.business_cents); $('protectDebt').textContent=money(d.daily_protection.debt_cents); $('protectInventory').textContent=money(d.daily_protection.inventory_cents);
   $('todayIncome').textContent=money(d.today.income_cents); $('todayExpense').textContent=money(d.today.expense_cents); $('todayPersonal').textContent=money(d.today.personal_withdrawal_cents); $('cashBalance').textContent=money(d.balances.cash_cents); $('cashExpected').textContent=money(d.balances.cash_cents);
   $('monthIncome').textContent=money(d.month.income_cents); $('monthExpense').textContent=money(d.month.expense_cents); $('monthNet').textContent=money(d.month.net_cents); $('monthNet').classList.toggle('negative',d.month.net_cents<0); $('monthNet').classList.toggle('positive',d.month.net_cents>=0);
   $('monthIncomeReport').textContent=money(d.month.sales_cents||0); if($('monthOldReceipts'))$('monthOldReceipts').textContent=money(d.month.old_receipts_cents||0); $('monthExpenseReport').textContent=money(d.month.expense_cents);
@@ -80,8 +89,9 @@ function renderPersonal(){
 function renderObligations(){
   const active=state.obligations.filter(o=>o.active);
   $('obligationsList').innerHTML=active.map(o=>obligationCard(o,false)).join('')||empty('Nenhuma conta cadastrada.');
-  const priority=active.filter(o=>o.counts_in_daily_target&&Number(o.remaining_cents)>0).slice(0,6);
-  $('obligationPreview').innerHTML=priority.map(o=>obligationCard(o,true)).join('')||empty('Nenhuma obrigação automática pendente.');
+  const currentKey=state.dashboard.period_key;
+  const priority=active.filter(o=>o.counts_in_daily_target&&Number(o.remaining_cents)>0&&String(o.target_period_key||currentKey)>currentKey).slice(0,6);
+  $('obligationPreview').innerHTML=priority.map(o=>obligationCard(o,true)).join('')||empty('Nenhum compromisso de ciclo futuro para reservar agora.');
   document.querySelectorAll('[data-reserve]').forEach(b=>b.addEventListener('click',()=>addReserve(Number(b.dataset.reserve))));
   document.querySelectorAll('[data-edit-obligation]').forEach(b=>b.addEventListener('click',()=>editObligation(Number(b.dataset.editObligation))));
   document.querySelectorAll('[data-pay-obligation]').forEach(b=>b.addEventListener('click',()=>prepareObligationPayment(Number(b.dataset.payObligation))));

@@ -43,7 +43,7 @@
         <button data-view="dividas"><span>↘</span><b>Dívidas</b></button>
         <button data-view="relatorios"><span>◔</span><b>Análises</b></button>
       </nav>
-      <div class="sidebar-foot"><small>Controle financeiro Pantaneira</small><strong>v1.7.3</strong></div>
+      <div class="sidebar-foot"><small>Controle financeiro Pantaneira</small><strong>v1.7.4</strong></div>
     </aside>
 
     <main>
@@ -52,11 +52,27 @@
           <div class="mp-main-column">
             <div class="page-heading mp-page-heading"><div><span class="page-kicker">VISÃO FINANCEIRA</span><h1>Saldo e extrato</h1><p>Seu caixa real, compromissos e movimentos em um só lugar.</p></div></div>
 
-            <article class="mp-balance-card">
-              <div class="mp-balance-copy"><span>PODE USAR AGORA</span><strong id="freeMoney">R$ 0,00</strong><small>dinheiro disponível menos compromissos rígidos atuais e próximos ainda não cobertos</small></div>
-              <div class="mp-balance-stats">
-                <div><span>Disponível imediato</span><b id="businessBalance">R$ 0,00</b></div>
-                <div><span>Compromissos a cobrir</span><b id="committed">R$ 0,00</b></div>
+            <article class="mp-balance-card mp-horizon-card">
+              <div class="mp-cash-now">
+                <span>DINHEIRO DISPONÍVEL AGORA</span>
+                <strong id="businessBalance">R$ 0,00</strong>
+                <small>saldo utilizável nas contas da empresa neste momento</small>
+              </div>
+              <div class="mp-horizon-grid">
+                <section class="mp-horizon-box current">
+                  <span id="currentPeriodLabel">MÊS ATUAL · A COBRIR</span>
+                  <strong id="committed">R$ 0,00</strong>
+                  <small>despesas vencidas e deste mês que ainda estão pendentes</small>
+                  <div class="mp-horizon-result"><span>Saldo livre do mês</span><b id="freeMoney">R$ 0,00</b></div>
+                </section>
+                <section class="mp-horizon-box future">
+                  <span>PRÓXIMOS COMPROMISSOS</span>
+                  <strong id="futureCommitted">R$ 0,00</strong>
+                  <small id="futurePeriodLabel">próximos ciclos ainda não vencidos</small>
+                  <div class="mp-horizon-result"><span>Reserva sugerida por dia</span><b id="futureReserveDaily">R$ 0,00</b></div>
+                </section>
+              </div>
+              <div class="mp-balance-stats compact">
                 <div><span>A compensar</span><b id="pendingBalance">R$ 0,00</b></div>
                 <div><span>Patrimônio empresa</span><b id="businessTotal">R$ 0,00</b></div>
               </div>
@@ -72,9 +88,9 @@
             <div class="mp-section-head"><div><h2>Suas contas</h2><p>Onde o dinheiro está agora.</p></div><button type="button" id="openAccountsOverviewBtn" class="mp-link">Ver tudo →</button></div>
             <div id="accountOverview" class="account-strip mp-account-strip"></div>
 
-            <div class="mp-section-head"><div><h2>Lançamentos futuros</h2><p>Contas do período atual ou do próximo ciclo que ainda precisam ser cobertas.</p></div><button id="showProtectionBtn" class="mp-link">Ver cálculo →</button></div>
+            <div class="mp-section-head"><div><h2>Reserva dos próximos ciclos</h2><p>Rateio diário apenas dos compromissos que pertencem aos meses seguintes.</p></div><button id="showProtectionBtn" class="mp-link">Ver cálculo →</button></div>
             <article class="protect-card mp-protect-inline">
-              <div class="protect-head"><div><span>PRECISA RESERVAR</span><strong id="protectTotal">R$ 0,00</strong></div></div>
+              <div class="protect-head"><div><span>RESERVA DIÁRIA FUTURA</span><strong id="protectTotal">R$ 0,00</strong></div></div>
               <div class="protect-grid three">
                 <div><span>Operação</span><b id="protectBusiness">R$ 0,00</b></div>
                 <div><span>Dívidas obrigatórias</span><b id="protectDebt">R$ 0,00</b></div>
@@ -264,7 +280,7 @@
           <article id="monthPersonalMetric" class="metric clickable-card" role="button" tabindex="0"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.7.3</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.7.4</strong></article>
         </div>
         <div class="section-title"><h2>Categorias</h2><p>Você pode criar categorias novas quando surgir qualquer tipo de gasto.</p></div>
         <button id="manageCategoriesSummaryBtn" class="btn secondary">Gerenciar categorias e subcategorias</button>
@@ -343,7 +359,7 @@
     </div>
   </dialog>
 
-  <dialog id="protectionDialog"><div class="dialog-head"><strong>Cálculo da reserva diária</strong><button id="closeProtection">×</button></div><div id="protectionItems" class="stack"></div></dialog>
+  <dialog id="protectionDialog"><div class="dialog-head"><strong>Cálculo da reserva futura</strong><button id="closeProtection">×</button></div><div id="protectionItems" class="stack"></div></dialog>
   <script type="module" src="/app.js"></script>
 </body>
 </html>
