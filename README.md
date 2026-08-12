@@ -139,3 +139,13 @@ Contas já pagas antes da fotografia inicial devem ser marcadas pelo botão **J�
 - Adiciona compensação para não deixar compras órfãs em falhas futuras.
 - Ao repetir uma compra à vista que falhou na v1.7.0 nas últimas 6 horas, recupera a compra órfã em vez de criar outra.
 - Não exige migration nova.
+
+
+## v1.7.2 — hotfix de valores do WhatsApp e transferência entre contas
+
+- Corrige o parser de valores que truncava quantias com quatro ou mais dígitos (`3500` virava `350`).
+- Aceita corretamente formatos como `3500`, `3.500`, `3500,00`, `3500.00`, `2835,00`, `2835.00` e `3.500,00`.
+- A correção vale para gastos/entradas e também para compras por fornecedor.
+- Adiciona comando financeiro de transferência entre contas: `transfere 27 mercado pago para nubank pix`.
+- Transferência não entra como receita, despesa ou faturamento.
+- Sem nova migration de banco.

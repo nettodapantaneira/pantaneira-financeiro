@@ -132,3 +132,10 @@ function isFinanceAdminCommand(value) {
 - `fin ajuda`
 
 Mensagens comuns do administrador como `oi`, `menu` etc. continuam no fluxo normal do bot porque não correspondem a comandos financeiros.
+
+
+## Atualização v1.7.2
+
+Comandos adicionais/corrigidos:
+- `transfere 27 mercado pago para nubank pix`
+- valores com quatro ou mais dígitos agora são interpretados integralmente.

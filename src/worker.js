@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.1" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.2" });
       }
 
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
@@ -745,6 +745,7 @@ async function executeWhatsAppCommand(db,input){
     "• compra 850 Super Compras mercado pago pix",
     "• compra 1200 J.C. Dal Magro a prazo",
     "• compra 1200 J.C. Dal Magro a prazo vence 20/08",
+    "• transfere 27 mercado pago para nubank pix",
     "• paguei 500 chico nubank pix",
     "• saldo",
     "• resumo agosto",
@@ -780,12 +781,17 @@ async function executeWhatsAppCommand(db,input){
     return executeWhatsAppPurchaseCommand(db,text);
   }
 
+  if(/^(transfere|transferir|transferencia)\b/.test(n)){
+    if(date)throw new Error("transferência pelo WhatsApp usa a data atual; para histórico, registre pelo app.");
+    return executeWhatsAppTransferCommand(db,text);
+  }
+
   const direction=n.match(/^(entrou|recebi|vendi|venda)\b/)?"income":(n.match(/^(gasto|gastei|paguei|saida|saiu)\b/)?"expense":null);
   if(!direction)throw new Error("comece com GASTO/PAGUEI, ENTROU/RECEBI ou COMPRA.");
 
-  const amountMatch=text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/i);
-  if(!amountMatch)throw new Error("não encontrei o valor.");
-  const amount=parsePtMoneyToCents(amountMatch[1]);
+  const amountInfo=extractWhatsAppMoney(text);
+  if(!amountInfo)throw new Error("não encontrei o valor.");
+  const amount=amountInfo.cents;
 
   const accounts=await listAccountsWithBalances(db);
   const account=findAccountAlias(accounts,n);
@@ -826,8 +832,8 @@ async function executeWhatsAppCommand(db,input){
   const occurredAt=`${date||localIsoDate(new Date())}T16:00:00.000Z`;
   const periodKey=periodKeyFromIso(occurredAt);
   const description=oldReceipt
-    ? buildOldReceiptDescription(text,amountMatch[0],accounts)
-    : buildWhatsappDescription(text,amountMatch[0]);
+    ? buildOldReceiptDescription(text,amountInfo.match,accounts)
+    : buildWhatsappDescription(text,amountInfo.match);
 
   const method=n.includes("pix")?"pix":n.includes("dinheiro")?"cash":n.includes("debito")?"debit":n.includes("credito")?"credit":n.includes("boleto")?"boleto":n.includes("transfer")?"transfer":"other";
   const source=direction==="expense"?(account?.id||null):null;
@@ -862,7 +868,7 @@ function extractWhatsAppDueDate(text){
 function stripPurchaseControlPhrases(value,accounts=[]){
   let out=String(value||"");
   out=out.replace(/^(compra|comprei)\s*/i,"");
-  out=out.replace(/(?:R\$\s*)?\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|(?:R\$\s*)?\d+(?:[.,]\d{1,2})?/i," ");
+  out=out.replace(/(?:R\$\s*)?\d+(?:[.,]\d+)*/i," ");
   out=out.replace(/\b(?:vence|vencimento|vcto)\s*(?:em\s*)?\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/ig," ");
   out=out.replace(/\b(?:a|à)\s+prazo\b/ig," ");
   out=out.replace(/\b(?:a|à)\s+vista\b/ig," ");
@@ -910,7 +916,7 @@ async function recoverRecentOrphanWhatsAppPurchase(db,{supplierName,total,accoun
       "inventory",
       inventoryCategory.id,
       `Compra - ${orphan.supplier_name||supplierName}`,
-      "Compra lançada pelo WhatsApp · recuperação automática v1.7.1",
+      "Compra lançada pelo WhatsApp · recuperação automática v1.7.2",
       orphan.payment_method||method,
       "eventual",
       "posted",
@@ -927,9 +933,9 @@ async function recoverRecentOrphanWhatsAppPurchase(db,{supplierName,total,accoun
 
 async function executeWhatsAppPurchaseCommand(db,text){
   const n=normalizeText(text);
-  const amountMatch=text.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/i);
-  if(!amountMatch)throw new Error("não encontrei o valor da compra.");
-  const total=parsePtMoneyToCents(amountMatch[1]);
+  const amountInfo=extractWhatsAppMoney(text);
+  if(!amountInfo)throw new Error("não encontrei o valor da compra.");
+  const total=amountInfo.cents;
 
   const accounts=await listAccountsWithBalances(db);
   const account=findAccountAlias(accounts,n);
@@ -1119,12 +1125,84 @@ async function findWhatsAppCategory(db,categories,n,direction,accounts=[]){
 }
 
 function findAccountAlias(accounts,n){const aliases=[["mercado pago","Mercado Pago"],[" mp ","Mercado Pago"],["nubank","Nubank"],["dinheiro","Dinheiro físico"],["caixa","Dinheiro físico"]];for(const [alias,name] of aliases)if((` ${n} `).includes(alias.trim()==="mp"?" mp ":alias)){const a=accounts.find(x=>normalizeText(x.name)===normalizeText(name));if(a)return a;}return accounts.find(a=>n.includes(normalizeText(a.name)))||null;}
-function buildWhatsappDescription(text,amountText){let s=text.replace(amountText,"").replace(/^(gasto|gastei|paguei|saida|saiu|entrou|recebi|vendi|venda|compra|comprei)\s*/i,"").trim();return s||"Lançamento WhatsApp";}
+function buildWhatsappDescription(text,amountText){let s=text.replace(amountText,"").replace(/^(gasto|gastei|paguei|saida|saiu|entrou|recebi|vendi|venda|compra|comprei|transfere|transferir|transferencia|transferência)\s*/i,"").trim();return s||"Lançamento WhatsApp";}
 function parseRequestedPeriod(n){const now=periodKeyLocal(new Date());if(n.includes("julho"))return "2026-07";if(n.includes("agosto"))return "2026-08";const m=n.match(/\b(\d{4})-(0[1-9]|1[0-2])\b/);return m?m[0]:now;}
 function periodLabel(key){const [y,m]=key.split("-").map(Number);return new Intl.DateTimeFormat("pt-BR",{month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(Date.UTC(y,m-1,1))).toUpperCase();}
 function normalizeText(v){return String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim();}
 function digitsOnly(v){return String(v||"").replace(/\D/g,"");}
-function parsePtMoneyToCents(v){const s=String(v).replace(/\./g,"").replace(",",".");const n=Number(s);if(!Number.isFinite(n)||n<=0)throw new Error("valor inválido.");return Math.round(n*100);}
+function extractWhatsAppMoney(value){
+  const match=String(value||"").match(/(?:R\$\s*)?(\d+(?:[.,]\d+)*)/i);
+  if(!match)return null;
+  return {match:match[0],token:match[1],cents:parsePtMoneyToCents(match[1])};
+}
+function parsePtMoneyToCents(v){
+  let s=String(v||"").trim().replace(/\s+/g,"");
+  if(!/^\d+(?:[.,]\d+)*$/.test(s))throw new Error("valor inválido.");
+  const hasComma=s.includes(","),hasDot=s.includes(".");
+  let normalized=s;
+  if(hasComma&&hasDot){
+    const decimalSep=s.lastIndexOf(",")>s.lastIndexOf(".")?",":".";
+    const thousandSep=decimalSep===","?".":",";
+    const parts=s.split(decimalSep);
+    if(parts.length!==2||parts[1].length>2)throw new Error("valor inválido.");
+    normalized=parts[0].split(thousandSep).join("")+(parts[1]?`.${parts[1]}`:"");
+  }else if(hasComma||hasDot){
+    const sep=hasComma?",":".";
+    const parts=s.split(sep);
+    if(parts.length===2){
+      const [left,right]=parts;
+      if(right.length===3&&left.length<=3)normalized=left+right;
+      else if(right.length<=2)normalized=`${left}.${right}`;
+      else throw new Error("valor inválido.");
+    }else{
+      if(parts.slice(1).every(part=>part.length===3))normalized=parts.join("");
+      else throw new Error("valor inválido.");
+    }
+  }
+  const n=Number(normalized);
+  if(!Number.isFinite(n)||n<=0)throw new Error("valor inválido.");
+  return Math.round(n*100);
+}
+function findWhatsAppAccountMentions(accounts,value){
+  const n=normalizeText(value);
+  const defs=[
+    {name:"Mercado Pago",aliases:["mercado pago"," mp "]},
+    {name:"Nubank",aliases:["nubank"]},
+    {name:"Dinheiro físico",aliases:["dinheiro fisico","dinheiro","caixa"]}
+  ];
+  const found=[];
+  for(const def of defs){
+    const account=accounts.find(a=>normalizeText(a.name)===normalizeText(def.name));
+    if(!account)continue;
+    let best=-1;
+    for(const aliasRaw of def.aliases){
+      const alias=aliasRaw.trim();
+      let idx=-1;
+      if(alias==="mp"){
+        const m=(` ${n} `).match(/\smp\s/);
+        idx=m?m.index:-1;
+      }else idx=n.indexOf(alias);
+      if(idx>=0&&(best<0||idx<best))best=idx;
+    }
+    if(best>=0)found.push({account,index:best});
+  }
+  return found.sort((a,b)=>a.index-b.index).map(x=>x.account);
+}
+async function executeWhatsAppTransferCommand(db,text){
+  const amountInfo=extractWhatsAppMoney(text);
+  if(!amountInfo)throw new Error("não encontrei o valor da transferência.");
+  const accounts=await listAccountsWithBalances(db);
+  const mentions=findWhatsAppAccountMentions(accounts,text);
+  if(mentions.length<2)throw new Error("informe origem e destino. Ex.: transfere 27 mercado pago para nubank pix.");
+  const source=mentions[0],destination=mentions[1];
+  if(Number(source.id)===Number(destination.id))throw new Error("origem e destino precisam ser contas diferentes.");
+  const n=normalizeText(text);
+  const method=n.includes("pix")?"pix":"transfer";
+  const occurredAt=new Date().toISOString();
+  const r=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,description,notes,payment_method,recurrence_type,status,opening_history) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(occurredAt,periodKeyFromIso(occurredAt),"transfer",amountInfo.cents,source.id,destination.id,"transfer",null,`Transferência ${source.name} → ${destination.name}`,"Transferência entre contas lançada pelo WhatsApp",method,"eventual","posted",0).run();
+  return {reply:`Transferência registrada: ${formatCents(amountInfo.cents)}\nOrigem: ${source.name}\nDestino: ${destination.name}\nForma: ${method==="pix"?"Pix":"Transferência"}\nID #${r.meta.last_row_id}`};
+}
 function localIsoDate(date){const p=localDateParts(date);return `${p.year}-${String(p.month).padStart(2,"0")}-${String(p.day).padStart(2,"0")}`;}
 async function verifyMetaSignature(raw,header,secret){if(!header.startsWith("sha256="))return false;const expected=await hmacHex(raw,secret);return safeEqual(header.slice(7),expected);}
 async function hmacHex(value,secret){const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);const out=new Uint8Array(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(value)));return [...out].map(b=>b.toString(16).padStart(2,"0")).join("");}
