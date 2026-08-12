@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Pantaneira Financeiro</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="toast" class="toast" hidden></div>
+
+  <section id="loginView" class="login-shell" hidden>
+    <div class="login-card">
+      <div class="brand-mark">P</div>
+      <h1>Pantaneira Financeiro</h1>
+      <p>Caixa real, contas, dívidas antigas, compras e retiradas pessoais.</p>
+      <form id="loginForm">
+        <label>Senha</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+        <button class="btn primary" type="submit">Entrar</button>
+      </form>
+      <p id="loginHint" class="muted small"></p>
+    </div>
+  </section>
+
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="topbar-brand"><div class="brand-mini">P</div><div><div class="eyebrow">PANTANEIRA</div><strong>Financeiro</strong></div></div>
+      <div class="topbar-title">Saldo e extrato</div>
+      <button id="refreshBtn" class="icon-btn" aria-label="Atualizar">↻</button>
+    </header>
+
+    <aside class="desktop-sidebar" aria-label="Navegação principal">
+      <div class="sidebar-logo"><div class="brand-mini">P</div><div><span>PANTANEIRA</span><strong>Financeiro</strong></div></div>
+      <nav class="sidebar-nav">
+        <button data-view="hoje" class="active"><span>▣</span><b>Saldo e extrato</b></button>
+        <button data-view="lancar"><span>＋</span><b>Movimentos</b></button>
+        <button data-view="contas"><span>▤</span><b>Contas</b></button>
+        <button data-view="dividas"><span>↘</span><b>Dívidas</b></button>
+        <button data-view="relatorios"><span>◔</span><b>Análises</b></button>
+      </nav>
+      <div class="sidebar-foot"><small>Controle financeiro Pantaneira</small><strong>v1.7.2</strong></div>
+    </aside>
+
+    <main>
+      <section id="view-hoje" class="view active">
+        <div class="mp-home-grid">
+          <div class="mp-main-column">
+            <div class="page-heading mp-page-heading"><div><span class="page-kicker">VISÃO FINANCEIRA</span><h1>Saldo e extrato</h1><p>Seu caixa real, compromissos e movimentos em um só lugar.</p></div></div>
+
+            <article class="mp-balance-card">
+              <div class="mp-balance-copy"><span>PODE USAR AGORA</span><strong id="freeMoney">R$ 0,00</strong><small>dinheiro disponível menos compromissos rígidos já assumidos</small></div>
+              <div class="mp-balance-stats">
+                <div><span>Disponível imediato</span><b id="businessBalance">R$ 0,00</b></div>
+                <div><span>Compromissos</span><b id="committed">R$ 0,00</b></div>
+                <div><span>A compensar</span><b id="pendingBalance">R$ 0,00</b></div>
+                <div><span>Patrimônio empresa</span><b id="businessTotal">R$ 0,00</b></div>
+              </div>
+            </article>
+
+            <div class="mp-quick-actions" aria-label="Ações rápidas">
+              <button type="button" id="quickIncomeBtn"><span>＋</span><b>Entrada</b><small>Venda ou recebimento</small></button>
+              <button type="button" id="quickExpenseBtn"><span>−</span><b>Saída</b><small>Gasto ou pagamento</small></button>
+              <button type="button" id="quickPurchaseHomeBtn"><span>▤</span><b>Compra</b><small>Por fornecedor</small></button>
+              <button type="button" id="quickTransferBtn"><span>⇄</span><b>Transferir</b><small>Entre suas contas</small></button>
+            </div>
+
+            <div class="mp-section-head"><div><h2>Suas contas</h2><p>Onde o dinheiro está agora.</p></div><button type="button" id="openAccountsOverviewBtn" class="mp-link">Ver tudo →</button></div>
+            <div id="accountOverview" class="account-strip mp-account-strip"></div>
+
+            <div class="mp-section-head"><div><h2>Lançamentos futuros</h2><p>Contas que realmente precisam ser cobertas.</p></div><button id="showProtectionBtn" class="mp-link">Ver cálculo →</button></div>
+            <article class="protect-card mp-protect-inline">
+              <div class="protect-head"><div><span>PRECISO PROTEGER HOJE</span><strong id="protectTotal">R$ 0,00</strong></div></div>
+              <div class="protect-grid three">
+                <div><span>Operação</span><b id="protectBusiness">R$ 0,00</b></div>
+                <div><span>Dívidas obrigatórias</span><b id="protectDebt">R$ 0,00</b></div>
+                <div><span>Compras a prazo</span><b id="protectInventory">R$ 0,00</b></div>
+              </div>
+            </article>
+            <div id="obligationPreview" class="stack mp-obligation-preview"></div>
+
+            <div class="mp-section-head"><div><h2>Extrato</h2><p>Últimos movimentos registrados.</p></div><button type="button" id="openMovementsHomeBtn" class="mp-link">Ver tudo →</button></div>
+            <div id="homeRecentTransactions" class="stack mp-home-extract"></div>
+          </div>
+
+          <aside class="mp-insights-column">
+            <div class="mp-analysis-title"><span>ANÁLISE DO MÊS</span><h2>Agosto</h2></div>
+
+            <article class="mp-insight-card">
+              <div class="mp-card-head"><div><h3>Entradas e saídas</h3><button type="button" id="openAnalysisHomeBtn" class="mp-link">Analisar →</button></div></div>
+              <div class="mp-flow-mini">
+                <div class="mp-flow-chart" aria-hidden="true"><div class="mp-flow-axis"></div><div id="homeIncomeBar" class="mp-flow-column income"></div><div id="homeExpenseBar" class="mp-flow-column expense"></div></div>
+                <div class="mp-flow-values">
+                  <button type="button" id="monthIncomeMetric" class="mp-flow-value"><span>Entradas</span><strong id="monthIncome">R$ 0,00</strong></button>
+                  <button type="button" id="monthExpenseMetric" class="mp-flow-value"><span>Saídas</span><strong id="monthExpense">R$ 0,00</strong></button>
+                  <div class="mp-flow-value net"><span>Entrou - saiu</span><strong id="monthNet">R$ 0,00</strong></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="mp-insight-card">
+              <div class="mp-card-head"><div><h3>Saídas por categoria</h3><button type="button" id="openCategoryAnalysisHomeBtn" class="mp-link">Analisar →</button></div></div>
+              <div class="mp-home-donut-wrap">
+                <button type="button" id="homeCategoryDonut" class="mp-home-donut" aria-label="Ver saídas por categoria"><div><span>Total no mês</span><strong id="homeCategoryTotal">R$ 0,00</strong></div></button>
+                <div id="homeCategoryLegend" class="mp-home-category-legend"></div>
+              </div>
+            </article>
+
+            <article id="personalMonthCard" class="personal-card clickable-card mp-personal-card" role="button" tabindex="0" aria-label="Ver retiradas pessoais do mês">
+              <div class="row top"><div><span class="kicker">RETIRADAS PESSOAIS · MÊS</span><strong id="personalUsed">R$ 0,00</strong></div><div class="right"><span class="muted small">Teto fixo</span><b id="personalCeiling">R$ 0,00</b></div></div>
+              <div class="progress"><span id="personalProgress"></span></div>
+              <div class="subline"><span id="personalRemaining">Restante R$ 0,00</span><span id="pensionStatus">Pensão: R$ 0,00</span></div>
+              <p id="personalAlert" class="warning-text" hidden></p>
+            </article>
+
+            <div class="mp-today-grid">
+              <article id="todayIncomeMetric" class="metric clickable-card" role="button" tabindex="0"><span>Entrou hoje</span><strong id="todayIncome">R$ 0,00</strong><small class="tap-hint">detalhes</small></article>
+              <article id="todayExpenseMetric" class="metric clickable-card" role="button" tabindex="0"><span>Saiu hoje</span><strong id="todayExpense">R$ 0,00</strong><small class="tap-hint">detalhes</small></article>
+              <article id="todayPersonalMetric" class="metric clickable-card emphasis-click" role="button" tabindex="0"><span>Pessoal hoje</span><strong id="todayPersonal">R$ 0,00</strong><small class="tap-hint">detalhes</small></article>
+              <article class="metric"><span>Dinheiro físico</span><strong id="cashBalance">R$ 0,00</strong></article>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="view-lancar" class="view">
+        <div class="page-heading"><div><span class="page-kicker">MOVIMENTOS</span><h1>Lançar</h1><p>Registre o que entrou, o que saiu e as compras da empresa.</p></div></div>
+        <div class="quick-tools"><button type="button" id="openHistoryBtn" class="quick-tool"><span>↶</span><div><strong>Histórico</strong><small>Julho e 01–10/08</small></div></button><button type="button" id="jumpPurchaseBtn" class="quick-tool"><span>▤</span><div><strong>Compra</strong><small>Por fornecedor</small></div></button></div>
+        <div class="section-title"><h2>Novo lançamento</h2><p>Registre o gasto e de onde o dinheiro saiu.</p></div>
+        <form id="transactionForm" class="form-card">
+          <div class="segmented" id="directionSelector">
+            <button type="button" data-value="expense" class="selected">Saída</button>
+            <button type="button" data-value="income">Entrada</button>
+            <button type="button" data-value="transfer">Transferência</button>
+          </div>
+          <input type="hidden" id="direction" value="expense" />
+          <label>Valor</label><input id="amount" inputmode="decimal" placeholder="0,00" required />
+          <label>Descrição</label><input id="description" placeholder="Ex.: pensão, almoço, aluguel" required />
+          <label>Natureza</label>
+          <select id="nature">
+            <option value="business_operating">Empresa · operação</option>
+            <option value="inventory">Empresa · compra/estoque</option>
+            <option value="business_debt">Empresa · pagar dívida</option>
+            <option value="personal_withdrawal">Retirada pessoal</option>
+            <option value="income">Receita</option>
+            <option value="transfer">Transferência</option>
+          </select>
+          <div class="field-head"><label>Categoria</label><button type="button" id="manageCategoriesBtn" class="link-btn">+ cadastrar / editar</button></div><select id="category"></select>
+
+          <div id="obligationWrap"><label>Conta/compromisso</label><select id="obligation"></select><small class="muted">Use para aluguel, funcionário, pensão ou compra a prazo cadastrada.</small></div>
+          <div id="debtWrap" hidden><label>Dívida</label><select id="debt"></select><small class="muted">Use aqui para Chico ou outra dívida antiga.</small></div>
+          <div id="supplierWrap" hidden><label>Fornecedor (opcional)</label><select id="supplier"></select></div>
+          <div id="sourceWrap"><label>De onde saiu?</label><select id="sourceAccount"></select></div>
+          <div id="destinationWrap" hidden><label>Onde entrou?</label><select id="destinationAccount"></select></div>
+          <label>Forma</label>
+          <select id="paymentMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra</option></select>
+          <label>Observação</label><textarea id="notes" rows="3" placeholder="Opcional"></textarea>
+          <div id="withdrawalPreview" class="notice warning" hidden></div>
+          <button class="btn primary" type="submit">Salvar lançamento</button>
+        </form>
+
+        <div id="purchaseSection" class="section-title"><h2>Compra por fornecedor</h2><p>Mercadoria, insumo ou despesa operacional comprada de fornecedor. À vista ou a prazo.</p></div>
+        <form id="purchaseForm" class="form-card">
+          <label>Tipo da compra</label>
+          <select id="purchaseNature"><option value="inventory">Mercadoria / estoque / insumo</option><option value="business_operating">Despesa da operação da loja</option></select>
+          <div class="field-head"><label>Categoria</label><button type="button" id="managePurchaseCategoriesBtn" class="link-btn">+ cadastrar / editar</button></div><select id="purchaseCategory"></select>
+          <label>Fornecedor cadastrado</label><select id="purchaseSupplier"></select>
+          <label>Ou novo fornecedor</label><input id="purchaseSupplierNew" placeholder="Nome do fornecedor" />
+          <label>Valor total da compra</label><input id="purchaseTotal" inputmode="decimal" placeholder="0,00" required />
+          <label>Quanto está pagando agora?</label><input id="purchasePaidNow" inputmode="decimal" placeholder="0,00" required />
+          <div id="purchasePaymentWrap">
+            <label>De qual conta sai o pagamento agora?</label><select id="purchaseSource"></select>
+            <label>Forma</label><select id="purchaseMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra</option></select>
+          </div>
+          <div id="purchaseDueWrap" hidden><label>Vencimento do valor que ficará a pagar</label><input id="purchaseDueDate" type="date" /></div>
+          <label>Observação</label><textarea id="purchaseNotes" rows="2" placeholder="Ex.: reposição de erva"></textarea>
+          <div id="purchaseSummary" class="notice" hidden></div>
+          <button class="btn primary" type="submit">Registrar compra</button>
+        </form>
+      </section>
+
+      <section id="view-antes" class="view">
+        <button type="button" id="backToMovementsBtn" class="back-link">← Voltar aos movimentos</button>
+        <div class="page-heading"><div><span class="page-kicker">HISTÓRICO</span><h1>Julho e início de agosto</h1><p>Reconstrua o período anterior sem alterar os saldos atuais.</p></div></div>
+        <div class="section-title"><h2>Lançar histórico</h2><p>Todo julho e os primeiros 10 dias de agosto entram nas análises mensais.</p></div>
+        <div class="notice warning"><b>Use para fatos anteriores à fotografia dos saldos de 10/08.</b><br>Você pode lançar todo julho e 01 a 10/08: despesas, retiradas pessoais, contas pagas e faturamento.</div>
+        <form id="openingHistoryForm" class="form-card top-gap">
+          <div class="segmented two-segment" id="openingDirectionSelector">
+            <button type="button" data-value="expense" class="selected">Já paguei / saiu</button>
+            <button type="button" data-value="income">Já entrou / vendi</button>
+          </div>
+          <input type="hidden" id="openingDirection" value="expense" />
+          <label>Data</label><input id="openingDate" type="date" min="2026-07-01" max="2026-08-10" value="2026-08-10" required />
+          <label>Valor</label><input id="openingAmount" inputmode="decimal" placeholder="0,00" required />
+          <label>Descrição</label><input id="openingDescription" placeholder="Ex.: mercado, marmita, venda da loja" required />
+          <label>Natureza</label>
+          <select id="openingNature">
+            <option value="personal_withdrawal">Retirada pessoal</option>
+            <option value="business_operating">Empresa · operação</option>
+            <option value="inventory">Empresa · compra/estoque</option>
+            <option value="business_debt">Empresa · dívida paga</option>
+            <option value="income">Receita / faturamento</option>
+          </select>
+          <div class="field-head"><label>Categoria</label><button type="button" id="manageOpeningCategoriesBtn" class="link-btn">+ cadastrar / editar</button></div><select id="openingCategory"></select>
+          <div id="openingObligationWrap"><label>Conta/compromisso (opcional)</label><select id="openingObligation"></select><small class="muted">Vincule se for Canva, ChatGPT, aluguel, funcionário etc. Assim a conta fica marcada como paga no mês.</small></div>
+          <label id="openingAccountLabel">De onde saiu? (se lembrar)</label><select id="openingAccount"><option value="">Não lembro / não informar</option></select><small class="muted">É apenas informação histórica e não altera o saldo atual.</small>
+          <label>Forma (se lembrar)</label>
+          <select id="openingPaymentMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra / não lembro</option></select>
+          <label>Observação</label><textarea id="openingNotes" rows="2" placeholder="Opcional"></textarea>
+          <button class="btn primary" type="submit">Salvar no histórico sem mexer no saldo</button>
+        </form>
+        <div class="section-title"><h2>Já informado antes do app</h2></div>
+        <div id="openingTransactionsList" class="stack"></div>
+      </section>
+
+      <section id="view-contas" class="view">
+        <div class="page-heading"><div><span class="page-kicker">CONTAS</span><h1>Dinheiro e compromissos</h1><p>Veja onde o dinheiro está e o que ainda precisa ser pago.</p></div></div>
+        <div class="section-title"><h2>Saldos e contas</h2><p>Mercado Pago, Nubank, dinheiro físico e valores a compensar.</p></div>
+        <div id="accountCards" class="stack account-list"></div>
+        <div class="section-title"><h2>Conferir dinheiro físico</h2><p>Compare o saldo do app com o dinheiro contado em mãos.</p></div>
+        <article class="hero-card small-hero cash-hero"><span>SALDO ESPERADO EM DINHEIRO</span><strong id="cashExpected">R$ 0,00</strong></article>
+        <form id="cashForm" class="form-card compact-cash-form">
+          <label>Quanto você contou agora?</label><input id="cashActual" inputmode="decimal" placeholder="0,00" required />
+          <button class="btn primary" type="submit">Conferir dinheiro</button>
+        </form>
+        <div id="cashResult" class="notice" hidden></div>
+        <div class="section-title"><h2>Contas e compromissos</h2><p>Correntes, pessoais fixos e compras a prazo. Use “Já pago antes do app” para despesas quitadas antes da fotografia inicial.</p></div>
+        <button id="newObligationBtn" class="btn secondary">+ Cadastrar conta</button>
+        <div id="obligationsList" class="stack spaced"></div>
+      </section>
+
+      <section id="view-dividas" class="view">
+        <div class="section-title"><h2>Dívidas antigas</h2><p>Pague conforme houver caixa. Cada pagamento reduz o saldo.</p></div>
+        <div class="grid two">
+          <article class="metric"><span>Saldo antigo conhecido</span><strong id="oldDebtBalance">R$ 0,00</strong></article>
+          <article class="metric"><span>Pago em dívidas no mês</span><strong id="monthDebt">R$ 0,00</strong></article>
+        </div>
+        <button id="newDebtBtn" class="btn secondary top-gap">+ Cadastrar dívida antiga</button>
+        <div id="debtsList" class="stack spaced"></div>
+      </section>
+
+      <section id="view-relatorios" class="view">
+        <div class="analysis-shell">
+          <div class="page-heading analysis-heading"><div><span class="page-kicker">ANÁLISES</span><h1>Seu dinheiro no mês</h1><p>Entradas, saídas e para onde o dinheiro foi.</p></div></div>
+          <div class="form-card compact-form analysis-period-card"><label>Mês da análise</label><select id="analysisPeriod"></select></div>
+          <article class="analysis-card">
+            <div class="row top"><div><h3>Entradas e saídas</h3><span class="muted small">Fluxo informado no mês</span></div><div id="analysisNetBadge" class="analysis-badge">R$ 0,00</div></div>
+            <div class="flow-bars"><button type="button" id="analysisIncomeDetail" class="flow-col flow-detail"><div class="flow-bar income" id="incomeFlowBar"></div><span>Entradas</span><strong id="analysisIncome">R$ 0,00</strong><small>ver detalhes</small></button><button type="button" id="analysisExpenseDetail" class="flow-col flow-detail"><div class="flow-bar expense" id="expenseFlowBar"></div><span>Saídas</span><strong id="analysisExpense">R$ 0,00</strong><small>ver detalhes</small></button></div>
+          </article>
+          <article class="analysis-card top-gap">
+            <div class="row top"><div><h3>Saídas por categoria</h3><span class="muted small">Cada gasto identificado</span></div><strong id="categoryExpenseTotal">R$ 0,00</strong></div>
+            <div class="donut-layout"><div id="categoryDonut" class="category-donut clickable-donut" role="button" tabindex="0" aria-label="Toque em uma faixa do gráfico para ver os gastos"><div><span>Total no mês</span><strong id="categoryDonutTotal">R$ 0,00</strong><small>toque em uma faixa</small></div></div><div id="categoryLegend" class="category-legend"></div></div>
+          </article>
+        </div>
+        <div class="section-title"><h2>Resumo do mês</h2></div>
+        <div class="grid two">
+          <article class="metric"><span>Faturamento informado</span><strong id="monthIncomeReport">R$ 0,00</strong></article>
+          <article class="metric"><span>Recebimentos de vendas anteriores</span><strong id="monthOldReceipts">R$ 0,00</strong></article>
+          <article id="monthExpenseReportMetric" class="metric clickable-card" role="button" tabindex="0"><span>Pago / saiu no mês</span><strong id="monthExpenseReport">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
+          <article id="monthPersonalMetric" class="metric clickable-card" role="button" tabindex="0"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
+          <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
+          <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.7.2</strong></article>
+        </div>
+        <div class="section-title"><h2>Categorias</h2><p>Você pode criar categorias novas quando surgir qualquer tipo de gasto.</p></div>
+        <button id="manageCategoriesSummaryBtn" class="btn secondary">Gerenciar categorias e subcategorias</button>
+        <div class="section-title"><h2>Compras recentes</h2></div><div id="purchasesList" class="stack"></div>
+        <div class="section-title"><h2>Últimos lançamentos</h2></div><div id="transactionsList" class="stack"></div>
+        <button id="logoutBtn" class="btn danger-outline">Sair do aplicativo</button>
+      </section>
+    </main>
+
+    <button id="fab" class="fab" aria-label="Novo lançamento">+</button>
+    <nav class="bottom-nav">
+      <button data-view="hoje" class="active"><span>⌂</span><small>Hoje</small></button>
+      <button data-view="lancar"><span>＋</span><small>Movimentos</small></button>
+      <button data-view="contas"><span>▣</span><small>Contas</small></button>
+      <button data-view="dividas"><span>↘</span><small>Dívidas</small></button>
+      <button data-view="relatorios"><span>◔</span><small>Análises</small></button>
+    </nav>
+  </div>
+
+
+  <dialog id="detailDialog" class="wide-dialog detail-dialog">
+    <div class="dialog-head"><div><strong id="detailTitle">Detalhes</strong><div id="detailSubtitle" class="muted small"></div></div><button type="button" id="closeDetailDialog">×</button></div>
+    <div class="dialog-body">
+      <div id="detailSummary" class="detail-summary"></div>
+      <div id="detailTransactions" class="stack"></div>
+    </div>
+  </dialog>
+
+  <dialog id="editTransactionDialog">
+    <form id="editTransactionForm" class="dialog-form" method="dialog">
+      <div class="dialog-head"><strong>Editar lançamento</strong><button type="button" id="closeEditTransaction">×</button></div>
+      <div class="dialog-body">
+        <input type="hidden" id="editTransactionId" />
+        <div id="editOpeningNotice" class="notice warning" hidden>Este lançamento pertence ao período <b>Antes do app</b>. A edição atualiza o histórico, mas continua sem movimentar os saldos atuais.</div>
+        <label>Data</label><input id="editDate" type="date" required />
+        <label>Tipo</label>
+        <select id="editDirection"><option value="expense">Saída</option><option value="income">Entrada</option><option value="transfer">Transferência</option></select>
+        <label>Valor</label><input id="editAmount" inputmode="decimal" required />
+        <label>Descrição</label><input id="editDescription" required />
+        <label>Natureza</label>
+        <select id="editNature">
+          <option value="business_operating">Empresa · operação</option><option value="inventory">Empresa · compra/estoque</option><option value="business_debt">Empresa · dívida</option><option value="personal_withdrawal">Retirada pessoal</option><option value="income">Receita</option><option value="transfer">Transferência</option><option value="unidentified">Não identificado</option>
+        </select>
+        <label>Categoria</label><select id="editCategory"></select>
+        <div id="editObligationWrap"><label>Conta/compromisso</label><select id="editObligation"></select></div>
+        <div id="editDebtWrap"><label>Dívida</label><select id="editDebt"></select></div>
+        <div id="editSourceWrap"><label>De onde saiu?</label><select id="editSourceAccount"></select></div>
+        <div id="editDestinationWrap"><label>Onde entrou?</label><select id="editDestinationAccount"></select></div>
+        <label>Forma</label><select id="editPaymentMethod"><option value="pix">Pix</option><option value="cash">Dinheiro</option><option value="debit">Débito</option><option value="credit">Crédito</option><option value="transfer">Transferência</option><option value="boleto">Boleto</option><option value="other">Outra</option></select>
+        <label>Observação</label><textarea id="editNotes" rows="3"></textarea>
+        <div class="dialog-actions"><button type="button" id="voidTransactionBtn" class="btn danger-outline compact-danger">Cancelar lançamento</button><button type="submit" class="btn primary">Salvar alterações</button></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="categoryDialog" class="wide-dialog">
+    <div class="dialog-head"><strong>Categorias do financeiro</strong><button type="button" id="closeCategoryDialog">×</button></div>
+    <div class="dialog-body">
+      <div class="notice"><b>Não ficou preso à lista do sistema.</b> Crie uma categoria sempre que surgir um gasto novo. Categorias usadas em histórico não são apagadas: podem ser desativadas.</div>
+      <form id="categoryForm" class="form-card compact-form top-gap">
+        <input type="hidden" id="categoryEditId" />
+        <label>Nome da categoria</label><input id="categoryName" placeholder="Ex.: Água mineral da loja" required />
+        <label>Grupo</label>
+        <select id="categoryNature">
+          <option value="business_operating">Empresa · operação</option>
+          <option value="inventory">Empresa · compras/estoque</option>
+          <option value="business_debt">Empresa · dívidas</option>
+          <option value="personal_withdrawal">Pessoal</option>
+          <option value="income">Receitas</option>
+        </select>
+        <label>Categoria principal (opcional)</label><select id="categoryParent"><option value="">Nenhuma</option></select>
+        <div class="dialog-actions"><button type="button" id="cancelCategoryEdit" class="btn secondary" hidden>Cancelar edição</button><button type="submit" class="btn primary">Salvar categoria</button></div>
+      </form>
+      <div class="section-title"><h2>Cadastradas</h2><p>Edite o nome ou desative o que não usa mais.</p></div>
+      <div id="categoryManagerList" class="stack"></div>
+    </div>
+  </dialog>
+
+  <dialog id="protectionDialog"><div class="dialog-head"><strong>Cálculo da proteção diária</strong><button id="closeProtection">×</button></div><div id="protectionItems" class="stack"></div></dialog>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
