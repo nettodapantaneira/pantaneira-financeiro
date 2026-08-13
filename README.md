@@ -1,3 +1,12 @@
+# Pantaneira Financeiro v1.7.7
+
+## Hotfix de integridade de contas
+- Repara automaticamente pagamentos do acordo que indicavam Nubank, mas ficaram vinculados ao Mercado Pago.
+- Adiciona correção de conta em lote, separada da reclassificação.
+- Bloqueia troca silenciosa de conta pela edição comum.
+- Mantém auditoria em `transaction_revisions`.
+- Migration nova: `0010_v1_7_7_reparo_contas_acordo.sql`.
+
 # Pantaneira Financeiro
 
 ## v1.7.5 — acordo societário empresarial + reclassificação em lote

@@ -21,7 +21,7 @@ function bindEvents(){
   $('quickIncomeBtn')?.addEventListener('click',()=>prepareQuickMovement('income')); $('quickExpenseBtn')?.addEventListener('click',()=>prepareQuickMovement('expense')); $('quickTransferBtn')?.addEventListener('click',()=>prepareQuickMovement('transfer')); $('quickPurchaseHomeBtn')?.addEventListener('click',()=>{showView('lancar');setTimeout(()=>$('purchaseSection')?.scrollIntoView({behavior:'smooth',block:'start'}),80);});
   $('openMovementsHomeBtn')?.addEventListener('click',()=>showView('lancar')); $('openAnalysisHomeBtn')?.addEventListener('click',()=>showView('relatorios')); $('openCategoryAnalysisHomeBtn')?.addEventListener('click',()=>showView('relatorios'));
   $('openAccountsOverviewBtn')?.addEventListener('click',()=>showView('contas')); $('openHistoryBtn')?.addEventListener('click',()=>showView('antes')); $('backToMovementsBtn')?.addEventListener('click',()=>showView('lancar')); $('jumpPurchaseBtn')?.addEventListener('click',()=>{showView('lancar');setTimeout(()=>$('purchaseSection')?.scrollIntoView({behavior:'smooth',block:'start'}),80);});
-  $('bulkEditBtn')?.addEventListener('click',openBulkReclassPage); $('backFromBulkBtn')?.addEventListener('click',()=>showView('lancar')); $('bulkSearchBtn')?.addEventListener('click',searchBulkTransactions); $('bulkClearBtn')?.addEventListener('click',clearBulkFilters); $('bulkSearch')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchBulkTransactions();}}); $('bulkSelectAll')?.addEventListener('change',toggleBulkSelectAll); $('bulkNature')?.addEventListener('change',renderBulkClassificationSelectors); $('bulkReplaceDescription')?.addEventListener('change',()=>{$('bulkDescription').disabled=!$('bulkReplaceDescription').checked;}); $('bulkAgreementPreset')?.addEventListener('click',fillCorporateAgreementPreset); $('bulkApplyBtn')?.addEventListener('click',applyBulkReclassification); document.querySelectorAll('[data-bulk-range]').forEach(b=>b.addEventListener('click',()=>setBulkRange(b.dataset.bulkRange)));
+  $('bulkEditBtn')?.addEventListener('click',openBulkReclassPage); $('backFromBulkBtn')?.addEventListener('click',()=>showView('lancar')); $('bulkSearchBtn')?.addEventListener('click',searchBulkTransactions); $('bulkClearBtn')?.addEventListener('click',clearBulkFilters); $('bulkSearch')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchBulkTransactions();}}); $('bulkSelectAll')?.addEventListener('change',toggleBulkSelectAll); $('bulkNature')?.addEventListener('change',renderBulkClassificationSelectors); $('bulkReplaceDescription')?.addEventListener('change',()=>{$('bulkDescription').disabled=!$('bulkReplaceDescription').checked;}); $('bulkAgreementPreset')?.addEventListener('click',fillCorporateAgreementPreset); $('bulkApplyBtn')?.addEventListener('click',applyBulkReclassification); $('bulkCorrectAccountBtn')?.addEventListener('click',applyBulkAccountCorrection); document.querySelectorAll('[data-bulk-range]').forEach(b=>b.addEventListener('click',()=>setBulkRange(b.dataset.bulkRange)));
   $('transactionForm').addEventListener('submit',saveTransaction); $('openingHistoryForm').addEventListener('submit',saveOpeningHistory); $('purchaseForm').addEventListener('submit',savePurchase); $('cashForm').addEventListener('submit',reconcileCash);
   $('showProtectionBtn').addEventListener('click',()=>$('protectionDialog').showModal()); $('closeProtection').addEventListener('click',()=>$('protectionDialog').close());
   document.querySelectorAll('#directionSelector button').forEach(b=>b.addEventListener('click',()=>setDirection(b.dataset.value))); document.querySelectorAll('#openingDirectionSelector button').forEach(b=>b.addEventListener('click',()=>setOpeningDirection(b.dataset.value)));
@@ -333,6 +333,7 @@ function monthStartYmd(ymd){return `${ymd.slice(0,7)}-01`;}
 function openBulkReclassPage(){
   showView('pesquisa');
   $('bulkAccount').innerHTML='<option value="">Todas as contas</option>'+state.accounts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  $('bulkCorrectAccount').innerHTML='<option value="">Selecione a conta correta</option>'+state.accounts.filter(a=>a.owner_scope==='business').map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
   $('bulkSearch').value=''; $('bulkAccount').value=''; $('bulkDirection').value=''; state.bulkTransactions=[];
   setBulkRange('month',false); resetBulkEditor(); renderBulkResults(); searchBulkTransactions(); setTimeout(()=>$('bulkSearch')?.focus(),80);
 }
@@ -390,6 +391,20 @@ async function applyBulkReclassification(){
   if(!confirm(`Reclassificar ${ids.length} lançamento${ids.length===1?'':'s'}?\n\nValor, data e conta de origem NÃO serão alterados.`))return;
   try{const result=await api('/api/transactions/bulk-reclassify',{method:'POST',body:JSON.stringify(payload)});toast(`${result.updated} lançamento(s) reclassificado(s).`);await loadAll();await searchBulkTransactions();}catch(err){toast(err.message);}
 }
+async function applyBulkAccountCorrection(){
+  const ids=selectedBulkIds(); if(!ids.length){toast('Selecione pelo menos uma saída.');return;}
+  const accountId=numOrNull($('bulkCorrectAccount').value); if(!accountId){toast('Selecione a conta correta.');return;}
+  const account=state.accounts.find(a=>Number(a.id)===Number(accountId));
+  if(!confirm(`Corrigir a conta de ${ids.length} lançamento${ids.length===1?'':'s'} para ${account?.name||'a conta selecionada'}?
+
+Somente a conta de saída será alterada. Valor, data, categoria, dívida e descrição permanecerão iguais.`))return;
+  try{
+    const result=await api('/api/transactions/bulk-account-correct',{method:'POST',body:JSON.stringify({ids,account_id:accountId})});
+    toast(`${result.updated} lançamento(s) corrigido(s) para ${result.account_name}.`);
+    await loadAll(); await searchBulkTransactions();
+  }catch(err){toast(err.message);}
+}
+
 function normalizeClient(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();}
 
 function natureGroupLabel(n){return ({business_operating:'Empresa · operação',inventory:'Empresa · compras/estoque',business_debt:'Empresa · dívidas',personal_withdrawal:'Pessoal',income:'Receitas'})[n]||labelNature(n);}

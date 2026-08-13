@@ -43,7 +43,7 @@
         <button data-view="dividas"><span>↘</span><b>Dívidas</b></button>
         <button data-view="relatorios"><span>◔</span><b>Análises</b></button>
       </nav>
-      <div class="sidebar-foot"><small>Controle financeiro Pantaneira</small><strong>v1.7.6</strong></div>
+      <div class="sidebar-foot"><small>Controle financeiro Pantaneira</small><strong>v1.7.7</strong></div>
     </aside>
 
     <main>
@@ -246,6 +246,12 @@
             <label class="check-line bulk-description-check"><input type="checkbox" id="bulkReplaceDescription" /> Padronizar também a descrição</label><input id="bulkDescription" placeholder="Ex.: Pagamento de acordo societário" disabled />
             <div class="notice warning"><b>Segurança:</b> esta ação altera apenas a classificação dos registros selecionados.</div>
             <button type="button" id="bulkApplyBtn" class="btn primary">Reclassificar selecionados</button>
+            <div class="bulk-account-fix">
+              <div class="bulk-editor-head"><span>CORREÇÃO DE SALDO</span><h2>Corrigir conta dos selecionados</h2><p>Use quando o lançamento está correto, mas saiu da conta errada.</p></div>
+              <label>Conta correta de saída</label><select id="bulkCorrectAccount"></select>
+              <div class="notice warning"><b>Importante:</b> altera somente a conta de saída. Valor, data, categoria, dívida e descrição permanecem iguais.</div>
+              <button type="button" id="bulkCorrectAccountBtn" class="btn secondary">Aplicar conta correta</button>
+            </div>
           </aside>
         </div>
       </section>
@@ -331,7 +337,7 @@
           <article id="monthPersonalMetric" class="metric clickable-card" role="button" tabindex="0"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.7.6</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.7.7</strong></article>
         </div>
         <div class="section-title"><h2>Categorias</h2><p>Você pode criar categorias novas quando surgir qualquer tipo de gasto.</p></div>
         <button id="manageCategoriesSummaryBtn" class="btn secondary">Gerenciar categorias e subcategorias</button>

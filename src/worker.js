@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.6" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.7" });
       }
 
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
@@ -97,6 +97,10 @@ export default {
       if(url.pathname==="/api/transactions/bulk-reclassify" && request.method==="POST"){
         const body=await readJson(request);
         return json(await bulkReclassifyTransactions(env.DB,body));
+      }
+      if(url.pathname==="/api/transactions/bulk-account-correct" && request.method==="POST"){
+        const body=await readJson(request);
+        return json(await bulkCorrectTransactionAccount(env.DB,body));
       }
       if (url.pathname === "/api/suppliers" && request.method === "GET") return json({suppliers:await listSuppliers(env.DB)});
       if (url.pathname === "/api/purchases" && request.method === "GET") return json({purchases:await listPurchases(env.DB,100)});
@@ -289,6 +293,13 @@ export default {
         if(!current)return json({error:"Lançamento não encontrado."},404);
         if(current.status==="void")return json({error:"Lançamento cancelado não pode ser editado."},400);
 
+        const requestedSource=body.source_account_id===undefined?current.source_account_id:(body.source_account_id==null?null:Number(body.source_account_id));
+        const requestedDestination=body.destination_account_id===undefined?current.destination_account_id:(body.destination_account_id==null?null:Number(body.destination_account_id));
+        const accountChanged=Number(requestedSource||0)!==Number(current.source_account_id||0)||Number(requestedDestination||0)!==Number(current.destination_account_id||0);
+        if(accountChanged && body.allow_account_change!==true){
+          return json({error:"Por segurança, a conta de um lançamento não pode ser alterada pela edição comum. Use Pesquisar lançamentos → Corrigir conta dos selecionados."},400);
+        }
+
         const isOpening=Number(current.opening_history||0)===1;
         if(current.purchase_id && !current.obligation_id && !isOpening && (body.amount_cents!==undefined || body.direction!==undefined || body.source_account_id!==undefined || body.destination_account_id!==undefined)){
           return json({error:"Este lançamento é o pagamento inicial de uma compra. Para não desalinhar a compra, edite apenas descrição, categoria ou observação por enquanto."},400);
@@ -405,7 +416,7 @@ async function buildDashboard(db){
   }
   const currentKey=periodKeyLocal(now);
   const target=obligations.filter(o=>o.active&&o.counts_in_daily_target);
-  // v1.7.6 — separa obrigação do mês atual/atrasada de compromissos de ciclos futuros.
+  // v1.7.7 — separa obrigação do mês atual/atrasada de compromissos de ciclos futuros.
   // Isso evita transformar uma reserva para setembro em "rombo" de agosto.
   const currentTarget=target.filter(o=>String(o.target_period_key||currentKey)<=currentKey);
   const futureTarget=target.filter(o=>String(o.target_period_key||currentKey)>currentKey);
@@ -679,6 +690,36 @@ async function bulkReclassifyTransactions(db,body){
   return {ok:true,updated:rows.length,ids};
 }
 
+async function bulkCorrectTransactionAccount(db,body){
+  const ids=Array.from(new Set((Array.isArray(body.ids)?body.ids:[]).map(Number).filter(id=>Number.isInteger(id)&&id>0)));
+  if(!ids.length)throw new Error("selecione pelo menos um lançamento.");
+  if(ids.length>200)throw new Error("selecione no máximo 200 lançamentos por vez.");
+  const accountId=toInteger(body.account_id,"account_id");
+  const account=await db.prepare("SELECT id,name,owner_scope FROM accounts WHERE id=?").bind(accountId).first();
+  if(!account||account.owner_scope!=="business")throw new Error("selecione uma conta empresarial válida.");
+
+  const placeholders=ids.map(()=>"?").join(",");
+  const rows=(await db.prepare(`SELECT * FROM transactions WHERE id IN (${placeholders}) ORDER BY id`).bind(...ids).all()).results||[];
+  if(rows.length!==ids.length)throw new Error("um ou mais lançamentos não foram encontrados.");
+
+  const statements=[];
+  let updated=0;
+  for(const current of rows){
+    if(current.status==="void")throw new Error(`o lançamento #${current.id} está cancelado.`);
+    if(Number(current.opening_history||0)===1)throw new Error(`o lançamento #${current.id} é histórico anterior e não altera saldo atual.`);
+    if(current.direction!=="expense")throw new Error(`o lançamento #${current.id} não é uma saída.`);
+    if(current.purchase_id)throw new Error(`o lançamento #${current.id} pertence a uma compra por fornecedor e deve ser corrigido pela compra.`);
+    if(Number(current.source_account_id||0)===Number(accountId))continue;
+    const next={...current,source_account_id:accountId,destination_account_id:null};
+    statements.push(db.prepare("UPDATE transactions SET source_account_id=?,destination_account_id=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(accountId,current.id));
+    statements.push(db.prepare("INSERT INTO transaction_revisions(transaction_id,action,before_json,after_json) VALUES(?,?,?,?)")
+      .bind(current.id,"edit",JSON.stringify(current),JSON.stringify(next)));
+    updated++;
+  }
+  if(statements.length)await db.batch(statements);
+  return {ok:true,updated,ids,account_id:accountId,account_name:account.name};
+}
+
 async function listSuppliers(db){
   return (await db.prepare(`SELECT s.id,s.name,s.notes,s.active,
     COALESCE((SELECT SUM(p.total_cents) FROM purchases p WHERE p.supplier_id=s.id AND substr(p.purchase_date,1,7)=?),0) month_total_cents
@@ -941,7 +982,7 @@ async function executeWhatsAppCommand(db,input){
   const oldReceipt=direction==="income"&&isOldSaleReceiptCommand(n);
   if(corporateAgreementAlias){
     cat=categories.find(c=>c.nature==="business_debt"&&normalizeText(c.name)==="aquisicao de participacao societaria");
-    if(!cat)throw new Error("categoria empresarial do acordo societário ainda não está disponível. Aguarde a migration da v1.7.6.");
+    if(!cat)throw new Error("categoria empresarial do acordo societário ainda não está disponível. Aguarde a migration da v1.7.7.");
   }else if(oldReceipt){
     cat=categories.find(c=>c.nature==="income"&&normalizeText(c.name)==="recebimento de vendas anteriores");
     if(!cat)throw new Error("categoria 'Recebimento de vendas anteriores' não encontrada. Aguarde a migration da versão 1.7.0.");
@@ -957,7 +998,7 @@ async function executeWhatsAppCommand(db,input){
     const debts=await listDebts(db);
     if(corporateAgreementAlias){
       const agreement=debts.find(d=>d.scope==="business"&&normalizeText(d.name)==="acordo societario");
-      if(!agreement)throw new Error("dívida empresarial 'Acordo societário' ainda não está disponível. Aguarde a migration da v1.7.6.");
+      if(!agreement)throw new Error("dívida empresarial 'Acordo societário' ainda não está disponível. Aguarde a migration da v1.7.7.");
       debtId=Number(agreement.id);
       nature="business_debt";
       obligationId=null;
@@ -1072,7 +1113,7 @@ async function recoverRecentOrphanWhatsAppPurchase(db,{supplierName,total,accoun
       "inventory",
       inventoryCategory.id,
       `Compra - ${orphan.supplier_name||supplierName}`,
-      "Compra lançada pelo WhatsApp · recuperação automática v1.7.6",
+      "Compra lançada pelo WhatsApp · recuperação automática v1.7.7",
       orphan.payment_method||method,
       "eventual",
       "posted",
