@@ -1,5 +1,12 @@
 # Pantaneira Financeiro
 
+## v1.7.5 — acordo societário empresarial + reclassificação em lote
+
+- Corrige o acordo de aquisição societária para Empresa, sem nome pessoal nos cadastros visíveis.
+- WhatsApp reconhece internamente o alias definido e grava descrição genérica.
+- Adiciona pesquisa, seleção múltipla e reclassificação em lote de lançamentos, sem alterar valor, data ou saldo das contas.
+- Preserva auditoria e ajusta saldo da dívida quando lançamentos são vinculados/desvinculados em lote.
+
 ## v1.7.4 — mês atual separado da reserva futura
 
 - O painel não mistura mais compromissos do mês atual com obrigações de meses seguintes no mesmo número negativo.

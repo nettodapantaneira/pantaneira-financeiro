@@ -1,4 +1,4 @@
-const state={dashboard:null,analysis:null,analysisPeriod:null,periods:[],accounts:[],categories:[],obligations:[],debts:[],transactions:[],historyTransactions:[],suppliers:[],purchases:[],analysisSegments:[],homeSegments:[]};
+const state={dashboard:null,analysis:null,analysisPeriod:null,periods:[],accounts:[],categories:[],obligations:[],debts:[],transactions:[],historyTransactions:[],suppliers:[],purchases:[],analysisSegments:[],homeSegments:[],bulkTransactions:[]};
 const $=id=>document.getElementById(id);
 const money=c=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format((Number(c)||0)/100);
 const pct=(a,b)=>b>0?Math.max(0,Math.min(100,Math.round(a/b*100))):0;
@@ -21,6 +21,7 @@ function bindEvents(){
   $('quickIncomeBtn')?.addEventListener('click',()=>prepareQuickMovement('income')); $('quickExpenseBtn')?.addEventListener('click',()=>prepareQuickMovement('expense')); $('quickTransferBtn')?.addEventListener('click',()=>prepareQuickMovement('transfer')); $('quickPurchaseHomeBtn')?.addEventListener('click',()=>{showView('lancar');setTimeout(()=>$('purchaseSection')?.scrollIntoView({behavior:'smooth',block:'start'}),80);});
   $('openMovementsHomeBtn')?.addEventListener('click',()=>showView('lancar')); $('openAnalysisHomeBtn')?.addEventListener('click',()=>showView('relatorios')); $('openCategoryAnalysisHomeBtn')?.addEventListener('click',()=>showView('relatorios'));
   $('openAccountsOverviewBtn')?.addEventListener('click',()=>showView('contas')); $('openHistoryBtn')?.addEventListener('click',()=>showView('antes')); $('backToMovementsBtn')?.addEventListener('click',()=>showView('lancar')); $('jumpPurchaseBtn')?.addEventListener('click',()=>{showView('lancar');setTimeout(()=>$('purchaseSection')?.scrollIntoView({behavior:'smooth',block:'start'}),80);});
+  $('bulkEditBtn')?.addEventListener('click',openBulkReclassDialog); $('closeBulkReclass')?.addEventListener('click',()=>$('bulkReclassDialog').close()); $('bulkSearchBtn')?.addEventListener('click',searchBulkTransactions); $('bulkSearch')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchBulkTransactions();}}); $('bulkSelectAll')?.addEventListener('change',toggleBulkSelectAll); $('bulkNature')?.addEventListener('change',renderBulkClassificationSelectors); $('bulkReplaceDescription')?.addEventListener('change',()=>{$('bulkDescription').disabled=!$('bulkReplaceDescription').checked;}); $('bulkAgreementPreset')?.addEventListener('click',fillCorporateAgreementPreset); $('bulkApplyBtn')?.addEventListener('click',applyBulkReclassification);
   $('transactionForm').addEventListener('submit',saveTransaction); $('openingHistoryForm').addEventListener('submit',saveOpeningHistory); $('purchaseForm').addEventListener('submit',savePurchase); $('cashForm').addEventListener('submit',reconcileCash);
   $('showProtectionBtn').addEventListener('click',()=>$('protectionDialog').showModal()); $('closeProtection').addEventListener('click',()=>$('protectionDialog').close());
   document.querySelectorAll('#directionSelector button').forEach(b=>b.addEventListener('click',()=>setDirection(b.dataset.value))); document.querySelectorAll('#openingDirectionSelector button').forEach(b=>b.addEventListener('click',()=>setOpeningDirection(b.dataset.value)));
@@ -321,6 +322,45 @@ Saldo real: ${money(next)}
 Diferença: ${diff>=0?'+ ':''}${money(diff)}
 
 Registrar ajuste sem apagar o histórico?`))return;try{await api(`/api/accounts/${id}/reconcile`,{method:'POST',body:JSON.stringify({new_balance_cents:next,reason})});toast('Saldo conciliado com registro de auditoria.');await loadAll();}catch(err){toast(err.message);}}
+
+function openBulkReclassDialog(){
+  const options=[...new Set([state.dashboard?.period_key,...(state.periods||[]),'2026-07','2026-08'].filter(Boolean))].sort().reverse();
+  $('bulkPeriod').innerHTML='<option value="">Todos os meses</option>'+options.map(k=>`<option value="${k}">${periodLabelClient(k)}</option>`).join('');
+  $('bulkPeriod').value=state.dashboard?.period_key||''; $('bulkSearch').value=''; state.bulkTransactions=[];
+  $('bulkResults').innerHTML='<div class="empty">Digite uma palavra e pesquise os lançamentos.</div>'; $('bulkSelectAll').checked=false; updateBulkSelectedCount();
+  $('bulkNature').value='business_operating'; $('bulkReplaceDescription').checked=false; $('bulkDescription').value=''; $('bulkDescription').disabled=true; renderBulkClassificationSelectors();
+  $('bulkReclassDialog').showModal(); setTimeout(()=>$('bulkSearch').focus(),50);
+}
+async function searchBulkTransactions(){
+  const q=$('bulkSearch').value.trim(),period=$('bulkPeriod').value; const params=new URLSearchParams({limit:'200',direction:'expense'}); if(q)params.set('q',q); if(period)params.set('period_key',period);
+  try{const data=await api(`/api/transactions?${params.toString()}`);state.bulkTransactions=(data.transactions||[]).filter(t=>t.status!=='void');renderBulkResults();}catch(err){toast(err.message);}
+}
+function renderBulkResults(){
+  const rows=state.bulkTransactions||[]; $('bulkSelectAll').checked=false;
+  $('bulkResults').innerHTML=rows.map(t=>{const cat=categoryDisplayForTransaction(t),origin=t.source_account||'Origem não informada';return `<label class="bulk-row"><input type="checkbox" class="bulk-check" value="${t.id}"><div class="bulk-row-main"><div class="row top"><div><strong>${esc(t.description)}</strong><small>#${t.id} · ${dateTimeBR(t.occurred_at)}</small></div><b>${money(t.amount_cents)}</b></div><small>${esc(cat)} · ${esc(origin)}${t.debt_name?` · ${esc(t.debt_name)}`:''}</small></div></label>`;}).join('')||'<div class="empty">Nenhum lançamento encontrado.</div>';
+  document.querySelectorAll('.bulk-check').forEach(c=>c.addEventListener('change',updateBulkSelectedCount)); updateBulkSelectedCount();
+}
+function toggleBulkSelectAll(){document.querySelectorAll('.bulk-check').forEach(c=>c.checked=$('bulkSelectAll').checked);updateBulkSelectedCount();}
+function selectedBulkIds(){return [...document.querySelectorAll('.bulk-check:checked')].map(c=>Number(c.value));}
+function updateBulkSelectedCount(){const n=selectedBulkIds().length;if($('bulkSelectedCount'))$('bulkSelectedCount').textContent=`${n} selecionado${n===1?'':'s'}`;}
+function renderBulkClassificationSelectors(){
+  const nature=$('bulkNature').value,cats=activeCategories(nature); $('bulkCategory').innerHTML='<option value="">Selecione</option>'+cats.map(c=>`<option value="${c.id}">${esc(categoryLabel(c))}</option>`).join('');
+  const scope=nature==='personal_withdrawal'?'personal':'business',show=['business_debt','personal_withdrawal'].includes(nature); $('bulkDebtWrap').hidden=!show;
+  $('bulkDebt').innerHTML='<option value="">Nenhuma / não vincular</option>'+state.debts.filter(d=>d.scope===scope&&d.status!=='paid').map(d=>`<option value="${d.id}">${esc(d.name)}${d.current_balance_cents!=null?` · ${money(d.current_balance_cents)}`:''}</option>`).join('');
+}
+function fillCorporateAgreementPreset(){
+  $('bulkNature').value='business_debt'; renderBulkClassificationSelectors();
+  const cat=state.categories.find(c=>c.nature==='business_debt'&&normalizeClient(c.name)==='aquisicao de participacao societaria'); if(cat)$('bulkCategory').value=String(cat.id);
+  const debt=state.debts.find(d=>d.scope==='business'&&normalizeClient(d.name)==='acordo societario'); if(debt)$('bulkDebt').value=String(debt.id);
+  $('bulkReplaceDescription').checked=true; $('bulkDescription').disabled=false; $('bulkDescription').value='Pagamento de acordo societário';
+}
+async function applyBulkReclassification(){
+  const ids=selectedBulkIds(); if(!ids.length){toast('Selecione pelo menos um lançamento.');return;} const categoryId=numOrNull($('bulkCategory').value); if(!categoryId){toast('Selecione a categoria de destino.');return;}
+  const payload={ids,nature:$('bulkNature').value,category_id:categoryId,debt_id:numOrNull($('bulkDebt').value),replace_description:$('bulkReplaceDescription').checked,description:$('bulkDescription').value.trim()};
+  if(!confirm(`Reclassificar ${ids.length} lançamento${ids.length===1?'':'s'}?\n\nValor, data e conta de origem NÃO serão alterados.`))return;
+  try{const result=await api('/api/transactions/bulk-reclassify',{method:'POST',body:JSON.stringify(payload)});toast(`${result.updated} lançamento(s) reclassificado(s).`);await loadAll();await searchBulkTransactions();}catch(err){toast(err.message);}
+}
+function normalizeClient(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();}
 
 function natureGroupLabel(n){return ({business_operating:'Empresa · operação',inventory:'Empresa · compras/estoque',business_debt:'Empresa · dívidas',personal_withdrawal:'Pessoal',income:'Receitas'})[n]||labelNature(n);}
 

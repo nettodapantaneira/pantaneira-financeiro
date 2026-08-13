@@ -139,3 +139,13 @@ Mensagens comuns do administrador como `oi`, `menu` etc. continuam no fluxo norm
 Comandos adicionais/corrigidos:
 - `transfere 27 mercado pago para nubank pix`
 - valores com quatro ou mais dígitos agora são interpretados integralmente.
+
+## v1.7.5 — acordo societário
+
+O Financeiro reconhece internamente os aliases `elaine`, `acordo societario`, `aquisicao societaria` e `acordo empresa` em comandos de saída. O lançamento salvo no Financeiro usa somente a classificação genérica empresarial **Acordo societário / Aquisição de participação societária**.
+
+Exemplo operacional:
+
+`paguei 50 elaine nubank pix`
+
+No Financeiro será gravado como **Pagamento de acordo societário**, natureza **Empresa · dívida**, vinculado à dívida **Acordo societário**.

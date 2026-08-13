@@ -43,7 +43,7 @@
         <button data-view="dividas"><span>↘</span><b>Dívidas</b></button>
         <button data-view="relatorios"><span>◔</span><b>Análises</b></button>
       </nav>
-      <div class="sidebar-foot"><small>Controle financeiro Pantaneira</small><strong>v1.7.4</strong></div>
+      <div class="sidebar-foot"><small>Controle financeiro Pantaneira</small><strong>v1.7.5</strong></div>
     </aside>
 
     <main>
@@ -145,7 +145,7 @@
 
       <section id="view-lancar" class="view">
         <div class="page-heading"><div><span class="page-kicker">MOVIMENTOS</span><h1>Lançar</h1><p>Registre o que entrou, o que saiu e as compras da empresa.</p></div></div>
-        <div class="quick-tools"><button type="button" id="openHistoryBtn" class="quick-tool"><span>↶</span><div><strong>Histórico</strong><small>Julho e 01–10/08</small></div></button><button type="button" id="jumpPurchaseBtn" class="quick-tool"><span>▤</span><div><strong>Compra</strong><small>Por fornecedor</small></div></button></div>
+        <div class="quick-tools"><button type="button" id="openHistoryBtn" class="quick-tool"><span>↶</span><div><strong>Histórico</strong><small>Julho e 01–10/08</small></div></button><button type="button" id="jumpPurchaseBtn" class="quick-tool"><span>▤</span><div><strong>Compra</strong><small>Por fornecedor</small></div></button><button type="button" id="bulkEditBtn" class="quick-tool wide"><span>⌕</span><div><strong>Pesquisar e selecionar lançamentos</strong><small>Corrigir vários de uma vez sem mexer no valor ou saldo</small></div></button></div>
         <div class="section-title"><h2>Novo lançamento</h2><p>Registre o gasto e de onde o dinheiro saiu.</p></div>
         <form id="transactionForm" class="form-card">
           <div class="segmented" id="directionSelector">
@@ -280,7 +280,7 @@
           <article id="monthPersonalMetric" class="metric clickable-card" role="button" tabindex="0"><span>Retiradas pessoais</span><strong id="monthPersonal">R$ 0,00</strong><small class="tap-hint">ver detalhes</small></article>
           <article class="metric"><span>Compras/estoque</span><strong id="monthInventory">R$ 0,00</strong></article>
           <article class="metric"><span>Dívidas pagas</span><strong id="monthDebtReport">R$ 0,00</strong></article>
-          <article class="metric"><span>Versão</span><strong>1.7.4</strong></article>
+          <article class="metric"><span>Versão</span><strong>1.7.5</strong></article>
         </div>
         <div class="section-title"><h2>Categorias</h2><p>Você pode criar categorias novas quando surgir qualquer tipo de gasto.</p></div>
         <button id="manageCategoriesSummaryBtn" class="btn secondary">Gerenciar categorias e subcategorias</button>
@@ -359,6 +359,24 @@
     </div>
   </dialog>
 
+
+  <dialog id="bulkReclassDialog" class="wide-dialog bulk-dialog">
+    <div class="dialog-head"><div><strong>Pesquisar e reclassificar lançamentos</strong><div class="muted small">Selecione vários registros e corrija a classificação de uma vez. Valor, data e conta não são alterados.</div></div><button type="button" id="closeBulkReclass">×</button></div>
+    <div class="dialog-body">
+      <div class="bulk-search-grid"><div><label>Pesquisar</label><input id="bulkSearch" placeholder="Ex.: acordos pessoais, aluguel, Nubank, 50" /></div><div><label>Mês</label><select id="bulkPeriod"><option value="">Todos os meses</option></select></div></div>
+      <button type="button" id="bulkSearchBtn" class="btn secondary">Pesquisar lançamentos</button>
+      <div class="bulk-toolbar"><label class="check-line"><input type="checkbox" id="bulkSelectAll" /> Selecionar todos exibidos</label><strong id="bulkSelectedCount">0 selecionados</strong></div>
+      <div id="bulkResults" class="stack bulk-results"><div class="empty">Pesquise para carregar os lançamentos.</div></div>
+      <div class="section-title compact-title"><h2>Aplicar aos selecionados</h2><p>Corrija natureza, categoria e vínculo de dívida sem editar um por um.</p></div>
+      <button type="button" id="bulkAgreementPreset" class="btn secondary bulk-preset">Preencher como acordo societário</button>
+      <label>Natureza</label><select id="bulkNature"><option value="business_operating">Empresa · operação</option><option value="inventory">Empresa · compra/estoque</option><option value="business_debt">Empresa · dívida</option><option value="personal_withdrawal">Retirada pessoal</option></select>
+      <label>Categoria</label><select id="bulkCategory"></select>
+      <div id="bulkDebtWrap" hidden><label>Dívida</label><select id="bulkDebt"><option value="">Nenhuma / não vincular</option></select></div>
+      <label class="check-line"><input type="checkbox" id="bulkReplaceDescription" /> Padronizar também a descrição</label><input id="bulkDescription" placeholder="Ex.: Pagamento de acordo societário" disabled />
+      <div class="notice warning"><b>Segurança:</b> valor, data, forma de pagamento e conta de origem permanecem intactos.</div>
+      <button type="button" id="bulkApplyBtn" class="btn primary">Reclassificar selecionados</button>
+    </div>
+  </dialog>
   <dialog id="protectionDialog"><div class="dialog-head"><strong>Cálculo da reserva futura</strong><button id="closeProtection">×</button></div><div id="protectionItems" class="stack"></div></dialog>
   <script type="module" src="/app.js"></script>
 </body>

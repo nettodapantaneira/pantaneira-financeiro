@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.4" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.5" });
       }
 
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
@@ -78,16 +78,21 @@ export default {
       if (url.pathname === "/api/obligations" && request.method === "GET") return json({obligations:await listObligations(env.DB)});
       if (url.pathname === "/api/debts" && request.method === "GET") return json({debts:await listDebts(env.DB)});
       if (url.pathname === "/api/transactions" && request.method === "GET") {
-        const limit=Math.min(Math.max(Number(url.searchParams.get("limit")||50),1),200);
+        const limit=Math.min(Math.max(Number(url.searchParams.get("limit")||50),1),500);
         const filters={
           direction:url.searchParams.get("direction")||null,
           nature:url.searchParams.get("nature")||null,
           period_key:url.searchParams.get("period_key")||null,
           category_id:url.searchParams.get("category_id")||null,
           opening_history:url.searchParams.get("opening_history")||null,
-          today:url.searchParams.get("today")==="1"
+          today:url.searchParams.get("today")==="1",
+          q:url.searchParams.get("q")||null
         };
         return json({transactions:await listTransactions(env.DB,limit,filters)});
+      }
+      if(url.pathname==="/api/transactions/bulk-reclassify" && request.method==="POST"){
+        const body=await readJson(request);
+        return json(await bulkReclassifyTransactions(env.DB,body));
       }
       if (url.pathname === "/api/suppliers" && request.method === "GET") return json({suppliers:await listSuppliers(env.DB)});
       if (url.pathname === "/api/purchases" && request.method === "GET") return json({purchases:await listPurchases(env.DB,100)});
@@ -396,7 +401,7 @@ async function buildDashboard(db){
   }
   const currentKey=periodKeyLocal(now);
   const target=obligations.filter(o=>o.active&&o.counts_in_daily_target);
-  // v1.7.4 — separa obrigação do mês atual/atrasada de compromissos de ciclos futuros.
+  // v1.7.5 — separa obrigação do mês atual/atrasada de compromissos de ciclos futuros.
   // Isso evita transformar uma reserva para setembro em "rombo" de agosto.
   const currentTarget=target.filter(o=>String(o.target_period_key||currentKey)<=currentKey);
   const futureTarget=target.filter(o=>String(o.target_period_key||currentKey)>currentKey);
@@ -561,6 +566,23 @@ async function listTransactions(db,limit,filters={}){
   if(filters.nature){where.push("t.nature=?");binds.push(filters.nature);}
   if(filters.period_key){where.push("t.period_key=?");binds.push(filters.period_key);}
   if(filters.category_id){where.push("t.category_id=?");binds.push(toInteger(filters.category_id,"category_id"));}
+  if(filters.q){
+    const rawQ=String(filters.q).trim().toLowerCase();
+    const q=`%${rawQ}%`;
+    const digits=rawQ.replace(/\D/g,"");
+    const textParts=[
+      "lower(COALESCE(t.description,'')) LIKE ?",
+      "lower(COALESCE(t.notes,'')) LIKE ?",
+      "lower(COALESCE(c.name,'')) LIKE ?",
+      "lower(COALESCE(pc.name,'')) LIKE ?",
+      "lower(COALESCE(sa.name,'')) LIKE ?",
+      "lower(COALESCE(da.name,'')) LIKE ?",
+      "lower(COALESCE(d.name,'')) LIKE ?"
+    ];
+    binds.push(q,q,q,q,q,q,q);
+    if(digits){textParts.push("CAST(t.amount_cents AS TEXT) LIKE ?");binds.push(`%${digits}%`);}
+    where.push(`(${textParts.join(" OR ")})`);
+  }
   if(filters.opening_history!==null&&filters.opening_history!==undefined&&filters.opening_history!==""){where.push("t.opening_history=?");binds.push(String(filters.opening_history)==="1"?1:0);}
   if(filters.today){const {start,end}=localDayUtcRange(new Date());where.push("t.occurred_at>=? AND t.occurred_at<?");binds.push(start,end);}
   const clause=where.length?`WHERE ${where.join(" AND ")}`:"";
@@ -570,6 +592,69 @@ async function listTransactions(db,limit,filters={}){
     ${clause} ORDER BY t.occurred_at DESC,t.id DESC LIMIT ?`;
   const {results}=await db.prepare(sql).bind(...binds,limit).all();
   return results;
+}
+
+async function bulkReclassifyTransactions(db,body){
+  const ids=Array.from(new Set((Array.isArray(body.ids)?body.ids:[]).map(Number).filter(id=>Number.isInteger(id)&&id>0)));
+  if(!ids.length)throw new Error("selecione pelo menos um lançamento.");
+  if(ids.length>200)throw new Error("selecione no máximo 200 lançamentos por vez.");
+
+  const nature=String(body.nature||"");
+  if(!["business_operating","inventory","business_debt","personal_withdrawal"].includes(nature))throw new Error("natureza inválida para reclassificação em lote.");
+  const categoryId=await validCategoryForNature(db,body.category_id,nature);
+  if(!categoryId)throw new Error("selecione uma categoria compatível.");
+
+  let debtId=body.debt_id==null||body.debt_id===""?null:toInteger(body.debt_id,"debt_id");
+  if(debtId){
+    if(!["business_debt","personal_withdrawal"].includes(nature))throw new Error("uma dívida só pode ser vinculada a uma saída de dívida.");
+    const debt=await db.prepare("SELECT id,scope,status FROM debts WHERE id=?").bind(debtId).first();
+    if(!debt||debt.status==="paid")throw new Error("dívida selecionada não está disponível.");
+    const expectedScope=nature==="personal_withdrawal"?"personal":"business";
+    if(debt.scope!==expectedScope)throw new Error("a dívida selecionada não combina com a natureza escolhida.");
+  }
+
+  const replaceDescription=body.replace_description===true;
+  const description=replaceDescription?String(body.description||"").trim():null;
+  if(replaceDescription&&!description)throw new Error("informe a descrição que será aplicada aos selecionados.");
+
+  const placeholders=ids.map(()=>"?").join(",");
+  const rows=(await db.prepare(`SELECT * FROM transactions WHERE id IN (${placeholders}) ORDER BY id`).bind(...ids).all()).results||[];
+  if(rows.length!==ids.length)throw new Error("um ou mais lançamentos não foram encontrados.");
+
+  const debtDelta=new Map();
+  const statements=[];
+  for(const current of rows){
+    if(current.status==="void")throw new Error(`o lançamento #${current.id} está cancelado e não pode ser reclassificado.`);
+    if(current.direction!=="expense")throw new Error(`o lançamento #${current.id} não é uma saída. A seleção em lote desta versão corrige apenas saídas.`);
+    if(current.purchase_id)throw new Error(`o lançamento #${current.id} pertence a uma compra por fornecedor e precisa ser tratado na própria compra.`);
+
+    let obligationId=current.obligation_id;
+    if(obligationId){
+      const obligation=await db.prepare("SELECT nature FROM obligations WHERE id=?").bind(obligationId).first();
+      if(!obligation||obligation.nature!==nature)obligationId=null;
+    }
+
+    const opening=Number(current.opening_history||0)===1;
+    if(!opening&&current.debt_id)debtDelta.set(Number(current.debt_id),(debtDelta.get(Number(current.debt_id))||0)+Number(current.amount_cents));
+    if(!opening&&debtId)debtDelta.set(Number(debtId),(debtDelta.get(Number(debtId))||0)-Number(current.amount_cents));
+
+    const next={...current,nature,category_id:categoryId,debt_id:debtId,obligation_id:obligationId,description:replaceDescription?description:current.description};
+    statements.push(db.prepare(`UPDATE transactions SET nature=?,category_id=?,debt_id=?,obligation_id=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE id=?`)
+      .bind(nature,categoryId,debtId,obligationId,next.description,current.id));
+    statements.push(db.prepare("INSERT INTO transaction_revisions(transaction_id,action,before_json,after_json) VALUES(?,?,?,?)")
+      .bind(current.id,"edit",JSON.stringify(current),JSON.stringify(next)));
+  }
+
+  for(const [id,delta] of debtDelta.entries()){
+    if(!delta)continue;
+    statements.push(db.prepare(`UPDATE debts SET
+      current_balance_cents=CASE WHEN current_balance_cents IS NULL THEN NULL ELSE MAX(0,current_balance_cents+?) END,
+      status=CASE WHEN current_balance_cents IS NULL THEN status WHEN MAX(0,current_balance_cents+?)<=0 THEN 'paid' ELSE 'active' END,
+      updated_at=CURRENT_TIMESTAMP WHERE id=?`).bind(delta,delta,id));
+  }
+
+  await db.batch(statements);
+  return {ok:true,updated:rows.length,ids};
 }
 
 async function listSuppliers(db){
@@ -830,8 +915,12 @@ async function executeWhatsAppCommand(db,input){
   const categories=(await db.prepare("SELECT id,name,nature,parent_id,active FROM categories WHERE active=1").all()).results;
 
   let cat=null;
+  const corporateAgreementAlias=direction==="expense"&&isCorporateAgreementAlias(n);
   const oldReceipt=direction==="income"&&isOldSaleReceiptCommand(n);
-  if(oldReceipt){
+  if(corporateAgreementAlias){
+    cat=categories.find(c=>c.nature==="business_debt"&&normalizeText(c.name)==="aquisicao de participacao societaria");
+    if(!cat)throw new Error("categoria empresarial do acordo societário ainda não está disponível. Aguarde a migration da v1.7.5.");
+  }else if(oldReceipt){
     cat=categories.find(c=>c.nature==="income"&&normalizeText(c.name)==="recebimento de vendas anteriores");
     if(!cat)throw new Error("categoria 'Recebimento de vendas anteriores' não encontrada. Aguarde a migration da versão 1.7.0.");
   }else{
@@ -844,15 +933,23 @@ async function executeWhatsAppCommand(db,input){
 
   if(direction==="expense"){
     const debts=await listDebts(db);
-    const debt=debts.find(d=>normalizeText(n).includes(normalizeText(d.name))||normalizeText(n).includes(normalizeText(d.creditor||""))||(normalizeText(d.name).includes("chico")&&n.includes("chico")));
-    if(debt){
-      debtId=Number(debt.id);
-      nature=debt.scope==="personal"?"personal_withdrawal":"business_debt";
-      const debtCat=categories.find(c=>c.nature===nature);
-      if(debtCat)cat.id=debtCat.id;
+    if(corporateAgreementAlias){
+      const agreement=debts.find(d=>d.scope==="business"&&normalizeText(d.name)==="acordo societario");
+      if(!agreement)throw new Error("dívida empresarial 'Acordo societário' ainda não está disponível. Aguarde a migration da v1.7.5.");
+      debtId=Number(agreement.id);
+      nature="business_debt";
+      obligationId=null;
+    }else{
+      const debt=debts.find(d=>normalizeText(n).includes(normalizeText(d.name))||normalizeText(n).includes(normalizeText(d.creditor||""))||(normalizeText(d.name).includes("chico")&&n.includes("chico")));
+      if(debt){
+        debtId=Number(debt.id);
+        nature=debt.scope==="personal"?"personal_withdrawal":"business_debt";
+        const debtCat=categories.find(c=>c.nature===nature);
+        if(debtCat)cat.id=debtCat.id;
+      }
+      const obs=(await db.prepare("SELECT id,name,nature,active FROM obligations WHERE active=1").all()).results.find(o=>n.includes(normalizeText(o.name)));
+      if(obs&&obs.nature===nature)obligationId=Number(obs.id);
     }
-    const obs=(await db.prepare("SELECT id,name,nature,active FROM obligations WHERE active=1").all()).results.find(o=>n.includes(normalizeText(o.name)));
-    if(obs&&obs.nature===nature)obligationId=Number(obs.id);
   }
 
   const historicalEnd=(await getSetting(db,"historical_entry_end_date"))||"2026-08-10";
@@ -863,16 +960,16 @@ async function executeWhatsAppCommand(db,input){
 
   const occurredAt=`${date||localIsoDate(new Date())}T16:00:00.000Z`;
   const periodKey=periodKeyFromIso(occurredAt);
-  const description=oldReceipt
-    ? buildOldReceiptDescription(text,amountInfo.match,accounts)
-    : buildWhatsappDescription(text,amountInfo.match);
+  const description=corporateAgreementAlias
+    ? "Pagamento de acordo societário"
+    : (oldReceipt ? buildOldReceiptDescription(text,amountInfo.match,accounts) : buildWhatsappDescription(text,amountInfo.match));
 
   const method=n.includes("pix")?"pix":n.includes("dinheiro")?"cash":n.includes("debito")?"debit":n.includes("credito")?"credit":n.includes("boleto")?"boleto":n.includes("transfer")?"transfer":"other";
   const source=direction==="expense"?(account?.id||null):null;
   const destination=direction==="income"?(account?.id||null):null;
 
   const r=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,obligation_id,debt_id,description,notes,payment_method,recurrence_type,status,opening_history) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(occurredAt,periodKey,direction,amount,source,destination,nature,cat.id,obligationId,debtId,description,oldReceipt?"Recebimento de venda anterior lançado pelo WhatsApp":"Lançado pelo WhatsApp",method,"eventual","posted",historical?1:0).run();
+    .bind(occurredAt,periodKey,direction,amount,source,destination,nature,cat.id,obligationId,debtId,description,corporateAgreementAlias?"Pagamento de acordo societário lançado pelo WhatsApp":(oldReceipt?"Recebimento de venda anterior lançado pelo WhatsApp":"Lançado pelo WhatsApp"),method,"eventual","posted",historical?1:0).run();
 
   if(debtId&&direction==="expense"&&!historical)await reduceDebt(db,debtId,amount);
 
@@ -881,6 +978,11 @@ async function executeWhatsAppCommand(db,input){
   const prefix=historical?"Histórico registrado sem alterar o saldo atual":"Registrado";
 
   return {reply:`${prefix}: ${direction==="income"?"entrada":"saída"} de ${formatCents(amount)}\nCategoria: ${categoryLabel}\n${account?`${direction==="income"?"Entrou em":"Saiu de"}: ${account.name}\n`:""}${date?`Data: ${date.split('-').reverse().join('/')}\n`:""}ID #${r.meta.last_row_id}`};
+}
+
+function isCorporateAgreementAlias(n){
+  const text=normalizeText(n);
+  return /\belaine\b/.test(text)||/\bacordo societario\b/.test(text)||/\baquisicao societaria\b/.test(text)||/\bacordo empresa\b/.test(text);
 }
 
 function isOldSaleReceiptCommand(n){
@@ -948,7 +1050,7 @@ async function recoverRecentOrphanWhatsAppPurchase(db,{supplierName,total,accoun
       "inventory",
       inventoryCategory.id,
       `Compra - ${orphan.supplier_name||supplierName}`,
-      "Compra lançada pelo WhatsApp · recuperação automática v1.7.4",
+      "Compra lançada pelo WhatsApp · recuperação automática v1.7.5",
       orphan.payment_method||method,
       "eventual",
       "posted",
