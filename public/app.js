@@ -21,7 +21,7 @@ function bindEvents(){
   $('quickIncomeBtn')?.addEventListener('click',()=>prepareQuickMovement('income')); $('quickExpenseBtn')?.addEventListener('click',()=>prepareQuickMovement('expense')); $('quickTransferBtn')?.addEventListener('click',()=>prepareQuickMovement('transfer')); $('quickPurchaseHomeBtn')?.addEventListener('click',()=>{showView('lancar');setTimeout(()=>$('purchaseSection')?.scrollIntoView({behavior:'smooth',block:'start'}),80);});
   $('openMovementsHomeBtn')?.addEventListener('click',()=>showView('lancar')); $('openAnalysisHomeBtn')?.addEventListener('click',()=>showView('relatorios')); $('openCategoryAnalysisHomeBtn')?.addEventListener('click',()=>showView('relatorios'));
   $('openAccountsOverviewBtn')?.addEventListener('click',()=>showView('contas')); $('openHistoryBtn')?.addEventListener('click',()=>showView('antes')); $('backToMovementsBtn')?.addEventListener('click',()=>showView('lancar')); $('jumpPurchaseBtn')?.addEventListener('click',()=>{showView('lancar');setTimeout(()=>$('purchaseSection')?.scrollIntoView({behavior:'smooth',block:'start'}),80);});
-  $('bulkEditBtn')?.addEventListener('click',openBulkReclassDialog); $('closeBulkReclass')?.addEventListener('click',()=>$('bulkReclassDialog').close()); $('bulkSearchBtn')?.addEventListener('click',searchBulkTransactions); $('bulkSearch')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchBulkTransactions();}}); $('bulkSelectAll')?.addEventListener('change',toggleBulkSelectAll); $('bulkNature')?.addEventListener('change',renderBulkClassificationSelectors); $('bulkReplaceDescription')?.addEventListener('change',()=>{$('bulkDescription').disabled=!$('bulkReplaceDescription').checked;}); $('bulkAgreementPreset')?.addEventListener('click',fillCorporateAgreementPreset); $('bulkApplyBtn')?.addEventListener('click',applyBulkReclassification);
+  $('bulkEditBtn')?.addEventListener('click',openBulkReclassPage); $('backFromBulkBtn')?.addEventListener('click',()=>showView('lancar')); $('bulkSearchBtn')?.addEventListener('click',searchBulkTransactions); $('bulkClearBtn')?.addEventListener('click',clearBulkFilters); $('bulkSearch')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();searchBulkTransactions();}}); $('bulkSelectAll')?.addEventListener('change',toggleBulkSelectAll); $('bulkNature')?.addEventListener('change',renderBulkClassificationSelectors); $('bulkReplaceDescription')?.addEventListener('change',()=>{$('bulkDescription').disabled=!$('bulkReplaceDescription').checked;}); $('bulkAgreementPreset')?.addEventListener('click',fillCorporateAgreementPreset); $('bulkApplyBtn')?.addEventListener('click',applyBulkReclassification); document.querySelectorAll('[data-bulk-range]').forEach(b=>b.addEventListener('click',()=>setBulkRange(b.dataset.bulkRange)));
   $('transactionForm').addEventListener('submit',saveTransaction); $('openingHistoryForm').addEventListener('submit',saveOpeningHistory); $('purchaseForm').addEventListener('submit',savePurchase); $('cashForm').addEventListener('submit',reconcileCash);
   $('showProtectionBtn').addEventListener('click',()=>$('protectionDialog').showModal()); $('closeProtection').addEventListener('click',()=>$('protectionDialog').close());
   document.querySelectorAll('#directionSelector button').forEach(b=>b.addEventListener('click',()=>setDirection(b.dataset.value))); document.querySelectorAll('#openingDirectionSelector button').forEach(b=>b.addEventListener('click',()=>setOpeningDirection(b.dataset.value)));
@@ -323,26 +323,56 @@ Diferença: ${diff>=0?'+ ':''}${money(diff)}
 
 Registrar ajuste sem apagar o histórico?`))return;try{await api(`/api/accounts/${id}/reconcile`,{method:'POST',body:JSON.stringify({new_balance_cents:next,reason})});toast('Saldo conciliado com registro de auditoria.');await loadAll();}catch(err){toast(err.message);}}
 
-function openBulkReclassDialog(){
-  const options=[...new Set([state.dashboard?.period_key,...(state.periods||[]),'2026-07','2026-08'].filter(Boolean))].sort().reverse();
-  $('bulkPeriod').innerHTML='<option value="">Todos os meses</option>'+options.map(k=>`<option value="${k}">${periodLabelClient(k)}</option>`).join('');
-  $('bulkPeriod').value=state.dashboard?.period_key||''; $('bulkSearch').value=''; state.bulkTransactions=[];
-  $('bulkResults').innerHTML='<div class="empty">Digite uma palavra e pesquise os lançamentos.</div>'; $('bulkSelectAll').checked=false; updateBulkSelectedCount();
-  $('bulkNature').value='business_operating'; $('bulkReplaceDescription').checked=false; $('bulkDescription').value=''; $('bulkDescription').disabled=true; renderBulkClassificationSelectors();
-  $('bulkReclassDialog').showModal(); setTimeout(()=>$('bulkSearch').focus(),50);
+function localYmd(date=new Date()){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Cuiaba',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
+  const map=Object.fromEntries(parts.filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+  return `${map.year}-${map.month}-${map.day}`;
+}
+function addDaysYmd(ymd,days){const [y,m,d]=ymd.split('-').map(Number);const dt=new Date(Date.UTC(y,m-1,d+days));return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;}
+function monthStartYmd(ymd){return `${ymd.slice(0,7)}-01`;}
+function openBulkReclassPage(){
+  showView('pesquisa');
+  $('bulkAccount').innerHTML='<option value="">Todas as contas</option>'+state.accounts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  $('bulkSearch').value=''; $('bulkAccount').value=''; $('bulkDirection').value=''; state.bulkTransactions=[];
+  setBulkRange('month',false); resetBulkEditor(); renderBulkResults(); searchBulkTransactions(); setTimeout(()=>$('bulkSearch')?.focus(),80);
+}
+function resetBulkEditor(){
+  $('bulkSelectAll').checked=false; $('bulkNature').value='business_operating'; $('bulkReplaceDescription').checked=false; $('bulkDescription').value=''; $('bulkDescription').disabled=true; renderBulkClassificationSelectors(); updateBulkSelectedCount();
+}
+function setBulkRange(range,runSearch=true){
+  const today=localYmd(); let from='',to='';
+  if(range==='today'){from=today;to=today;}
+  else if(range==='yesterday'){from=addDaysYmd(today,-1);to=from;}
+  else if(range==='7days'){from=addDaysYmd(today,-6);to=today;}
+  else if(range==='month'){from=monthStartYmd(today);to=today;}
+  $('bulkDateFrom').value=from; $('bulkDateTo').value=to;
+  document.querySelectorAll('[data-bulk-range]').forEach(b=>b.classList.toggle('active',b.dataset.bulkRange===range));
+  if(runSearch)searchBulkTransactions();
+}
+function clearBulkFilters(){
+  $('bulkSearch').value=''; $('bulkAccount').value=''; $('bulkDirection').value=''; setBulkRange('month',false); searchBulkTransactions();
 }
 async function searchBulkTransactions(){
-  const q=$('bulkSearch').value.trim(),period=$('bulkPeriod').value; const params=new URLSearchParams({limit:'200',direction:'expense'}); if(q)params.set('q',q); if(period)params.set('period_key',period);
+  let q=$('bulkSearch').value.trim(),accountId=$('bulkAccount').value; const direction=$('bulkDirection').value,dateFrom=$('bulkDateFrom').value,dateTo=$('bulkDateTo').value;
+  if(!accountId&&q){const accountMatch=state.accounts.find(a=>normalizeClient(a.name)===normalizeClient(q));if(accountMatch){accountId=String(accountMatch.id);$('bulkAccount').value=accountId;q='';}}
+  if(dateFrom&&dateTo&&dateFrom>dateTo){toast('A data inicial não pode ser maior que a data final.');return;}
+  const params=new URLSearchParams({limit:'500',search_scope:'content'}); if(q)params.set('q',q); if(accountId)params.set('account_id',accountId); if(direction)params.set('direction',direction); if(dateFrom)params.set('date_from',dateFrom); if(dateTo)params.set('date_to',dateTo);
   try{const data=await api(`/api/transactions?${params.toString()}`);state.bulkTransactions=(data.transactions||[]).filter(t=>t.status!=='void');renderBulkResults();}catch(err){toast(err.message);}
 }
+function bulkAccountLabel(t){if(t.direction==='transfer')return `${t.source_account||'Origem?'} → ${t.destination_account||'Destino?'}`;if(t.direction==='income')return t.destination_account||'Destino não informado';return t.source_account||'Origem não informada';}
+function bulkDirectionLabel(t){return t.direction==='income'?'Entrada':t.direction==='transfer'?'Transferência':'Saída';}
+function bulkSelectable(t){return t.direction==='expense'&&t.status!=='void'&&!t.purchase_id;}
 function renderBulkResults(){
   const rows=state.bulkTransactions||[]; $('bulkSelectAll').checked=false;
-  $('bulkResults').innerHTML=rows.map(t=>{const cat=categoryDisplayForTransaction(t),origin=t.source_account||'Origem não informada';return `<label class="bulk-row"><input type="checkbox" class="bulk-check" value="${t.id}"><div class="bulk-row-main"><div class="row top"><div><strong>${esc(t.description)}</strong><small>#${t.id} · ${dateTimeBR(t.occurred_at)}</small></div><b>${money(t.amount_cents)}</b></div><small>${esc(cat)} · ${esc(origin)}${t.debt_name?` · ${esc(t.debt_name)}`:''}</small></div></label>`;}).join('')||'<div class="empty">Nenhum lançamento encontrado.</div>';
+  const income=rows.filter(t=>t.direction==='income').reduce((a,t)=>a+Number(t.amount_cents||0),0),expense=rows.filter(t=>t.direction==='expense').reduce((a,t)=>a+Number(t.amount_cents||0),0);
+  $('bulkResultsCount').textContent=String(rows.length); $('bulkIncomeTotal').textContent=money(income); $('bulkExpenseTotal').textContent=money(expense);
+  const filters=[]; if($('bulkAccount').value){const a=state.accounts.find(x=>String(x.id)===$('bulkAccount').value);if(a)filters.push(`Conta: ${a.name}`);} if($('bulkDateFrom').value||$('bulkDateTo').value)filters.push(`Período: ${dateBR($('bulkDateFrom').value||$('bulkDateTo').value)} a ${dateBR($('bulkDateTo').value||$('bulkDateFrom').value)}`); if($('bulkDirection').value)filters.push(`Tipo: ${$('bulkDirection').selectedOptions[0].textContent}`); if($('bulkSearch').value.trim())filters.push(`Busca: “${$('bulkSearch').value.trim()}”`); $('bulkFilterSummary').textContent=filters.join(' · ')||'Todos os lançamentos encontrados.';
+  $('bulkResults').innerHTML=rows.map(t=>{const cat=categoryDisplayForTransaction(t),account=bulkAccountLabel(t),selectable=bulkSelectable(t),sign=t.direction==='income'?'+':t.direction==='expense'?'-':'',valueClass=t.direction==='income'?'positive':t.direction==='expense'?'negative':'',reason=!selectable?(t.purchase_id?'Compra vinculada — edite pela compra':t.direction!=='expense'?'Consulta somente':'Não selecionável'):'';return `<label class="bulk-report-row${selectable?'':' not-selectable'}"><input type="checkbox" class="bulk-check" value="${t.id}" ${selectable?'':'disabled'}><div class="bulk-report-date"><strong>${dateOnlyBR(t.occurred_at)}</strong><small>${dateTimeOnlyBR(t.occurred_at)}</small></div><div class="bulk-report-main"><strong>${esc(t.description)}</strong><small>#${t.id}${t.notes?` · ${esc(t.notes)}`:''}</small><div class="bulk-report-tags"><span>${esc(cat)}</span><span class="account">${esc(account)}</span><span>${bulkDirectionLabel(t)}</span>${t.debt_name?`<span>${esc(t.debt_name)}</span>`:''}</div>${reason?`<small class="bulk-row-reason">${esc(reason)}</small>`:''}</div><div class="bulk-report-value ${valueClass}">${sign}${money(t.amount_cents)}</div></label>`;}).join('')||'<div class="empty">Nenhum lançamento encontrado com estes filtros.</div>';
   document.querySelectorAll('.bulk-check').forEach(c=>c.addEventListener('change',updateBulkSelectedCount)); updateBulkSelectedCount();
 }
-function toggleBulkSelectAll(){document.querySelectorAll('.bulk-check').forEach(c=>c.checked=$('bulkSelectAll').checked);updateBulkSelectedCount();}
+function toggleBulkSelectAll(){document.querySelectorAll('.bulk-check:not(:disabled)').forEach(c=>c.checked=$('bulkSelectAll').checked);updateBulkSelectedCount();}
 function selectedBulkIds(){return [...document.querySelectorAll('.bulk-check:checked')].map(c=>Number(c.value));}
-function updateBulkSelectedCount(){const n=selectedBulkIds().length;if($('bulkSelectedCount'))$('bulkSelectedCount').textContent=`${n} selecionado${n===1?'':'s'}`;}
+function updateBulkSelectedCount(){const n=selectedBulkIds().length;if($('bulkSelectedCount'))$('bulkSelectedCount').textContent=String(n);}
 function renderBulkClassificationSelectors(){
   const nature=$('bulkNature').value,cats=activeCategories(nature); $('bulkCategory').innerHTML='<option value="">Selecione</option>'+cats.map(c=>`<option value="${c.id}">${esc(categoryLabel(c))}</option>`).join('');
   const scope=nature==='personal_withdrawal'?'personal':'business',show=['business_debt','personal_withdrawal'].includes(nature); $('bulkDebtWrap').hidden=!show;
@@ -459,7 +489,7 @@ function detailTransactionCard(t){
 function categoryDisplayForTransaction(t){const c=state.categories.find(x=>Number(x.id)===Number(t.category_id));return c?categoryLabel(c):(t.parent_category_name?`${t.parent_category_name} › ${t.category_name||''}`:(t.category_name||labelNature(t.nature)));}
 function paymentMethodLabel(v){return ({pix:'Pix',cash:'Dinheiro',debit:'Débito',credit:'Crédito',transfer:'Transferência',boleto:'Boleto',other:'Outra / não informado'})[v]||'Não informado';}
 
-function showView(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));const navName=name==='antes'?'lancar':name==='caixa'?'contas':name;document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===navName));window.scrollTo({top:0,behavior:'smooth'});}
+function showView(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));const navName=(name==='antes'||name==='pesquisa')?'lancar':name==='caixa'?'contas':name;document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===navName));window.scrollTo({top:0,behavior:'smooth'});}
 async function logout(){await api('/api/auth/logout',{method:'POST'});location.reload();}
 async function api(url,options={},auth=true){const r=await fetch(url,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});let data={};try{data=await r.json();}catch{}if(!r.ok){const e=new Error(data.error||`Erro ${r.status}`);e.status=r.status;throw e;}return data;}
 function parseMoney(v){const s=String(v??'').trim().replace(/\s/g,'');if(!s)throw new Error('Informe o valor.');let normalized=s;if(s.includes(','))normalized=s.replace(/\./g,'').replace(',','.');const n=Number(normalized);if(!Number.isFinite(n)||n<0)throw new Error('Valor inválido.');return Math.round(n*100);}
@@ -470,6 +500,8 @@ function labelNature(n){return ({business_operating:'Empresa · operação',inve
 function accountType(t){return ({bank:'Conta bancária',cash:'Dinheiro físico',card:'Cartão',other:'Outro ativo'})[t]||t;}
 function dueDateForPeriodClient(key,dueDay){const [y,m]=String(key).split('-').map(Number);const last=new Date(Date.UTC(y,m,0)).getUTCDate();const day=Math.min(Number(dueDay||1),last);return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;}
 function dateTimeBR(v){return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Cuiaba',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(v));}
+function dateTimeOnlyBR(v){return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Cuiaba',hour:'2-digit',minute:'2-digit'}).format(new Date(v));}
+function dateOnlyBR(v){return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Cuiaba',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(v));}
 function dateBR(v){const s=String(v).slice(0,10);const [y,m,d]=s.split('-');return d&&m&&y?`${d}/${m}/${y}`:s;}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function empty(t){return `<div class="notice muted">${esc(t)}</div>`;}

@@ -11,7 +11,7 @@ export default {
 
     try {
       if (url.pathname === "/api/health" && request.method === "GET") {
-        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.5" });
+        return json({ ok:true, app:env.APP_NAME || "Pantaneira Financeiro", version:env.APP_VERSION || "1.7.6" });
       }
 
       if (url.pathname === "/api/whatsapp/webhook" && request.method === "GET") return verifyWhatsAppWebhook(url,env);
@@ -86,7 +86,11 @@ export default {
           category_id:url.searchParams.get("category_id")||null,
           opening_history:url.searchParams.get("opening_history")||null,
           today:url.searchParams.get("today")==="1",
-          q:url.searchParams.get("q")||null
+          q:url.searchParams.get("q")||null,
+          search_scope:url.searchParams.get("search_scope")||null,
+          account_id:url.searchParams.get("account_id")||null,
+          date_from:url.searchParams.get("date_from")||null,
+          date_to:url.searchParams.get("date_to")||null
         };
         return json({transactions:await listTransactions(env.DB,limit,filters)});
       }
@@ -401,7 +405,7 @@ async function buildDashboard(db){
   }
   const currentKey=periodKeyLocal(now);
   const target=obligations.filter(o=>o.active&&o.counts_in_daily_target);
-  // v1.7.5 — separa obrigação do mês atual/atrasada de compromissos de ciclos futuros.
+  // v1.7.6 — separa obrigação do mês atual/atrasada de compromissos de ciclos futuros.
   // Isso evita transformar uma reserva para setembro em "rombo" de agosto.
   const currentTarget=target.filter(o=>String(o.target_period_key||currentKey)<=currentKey);
   const futureTarget=target.filter(o=>String(o.target_period_key||currentKey)>currentKey);
@@ -566,6 +570,21 @@ async function listTransactions(db,limit,filters={}){
   if(filters.nature){where.push("t.nature=?");binds.push(filters.nature);}
   if(filters.period_key){where.push("t.period_key=?");binds.push(filters.period_key);}
   if(filters.category_id){where.push("t.category_id=?");binds.push(toInteger(filters.category_id,"category_id"));}
+  if(filters.account_id){
+    const accountId=toInteger(filters.account_id,"account_id");
+    where.push("(t.source_account_id=? OR t.destination_account_id=?)");
+    binds.push(accountId,accountId);
+  }
+  if(filters.date_from){
+    const dateFrom=optionalIsoDate(filters.date_from);
+    where.push("date(datetime(t.occurred_at,'-4 hours'))>=date(?)");
+    binds.push(dateFrom);
+  }
+  if(filters.date_to){
+    const dateTo=optionalIsoDate(filters.date_to);
+    where.push("date(datetime(t.occurred_at,'-4 hours'))<=date(?)");
+    binds.push(dateTo);
+  }
   if(filters.q){
     const rawQ=String(filters.q).trim().toLowerCase();
     const q=`%${rawQ}%`;
@@ -575,11 +594,14 @@ async function listTransactions(db,limit,filters={}){
       "lower(COALESCE(t.notes,'')) LIKE ?",
       "lower(COALESCE(c.name,'')) LIKE ?",
       "lower(COALESCE(pc.name,'')) LIKE ?",
-      "lower(COALESCE(sa.name,'')) LIKE ?",
-      "lower(COALESCE(da.name,'')) LIKE ?",
-      "lower(COALESCE(d.name,'')) LIKE ?"
+      "lower(COALESCE(d.name,'')) LIKE ?",
+      "lower(COALESCE(s.name,'')) LIKE ?"
     ];
-    binds.push(q,q,q,q,q,q,q);
+    binds.push(q,q,q,q,q,q);
+    if(filters.search_scope!=="content"){
+      textParts.push("lower(COALESCE(sa.name,'')) LIKE ?","lower(COALESCE(da.name,'')) LIKE ?");
+      binds.push(q,q);
+    }
     if(digits){textParts.push("CAST(t.amount_cents AS TEXT) LIKE ?");binds.push(`%${digits}%`);}
     where.push(`(${textParts.join(" OR ")})`);
   }
@@ -919,7 +941,7 @@ async function executeWhatsAppCommand(db,input){
   const oldReceipt=direction==="income"&&isOldSaleReceiptCommand(n);
   if(corporateAgreementAlias){
     cat=categories.find(c=>c.nature==="business_debt"&&normalizeText(c.name)==="aquisicao de participacao societaria");
-    if(!cat)throw new Error("categoria empresarial do acordo societário ainda não está disponível. Aguarde a migration da v1.7.5.");
+    if(!cat)throw new Error("categoria empresarial do acordo societário ainda não está disponível. Aguarde a migration da v1.7.6.");
   }else if(oldReceipt){
     cat=categories.find(c=>c.nature==="income"&&normalizeText(c.name)==="recebimento de vendas anteriores");
     if(!cat)throw new Error("categoria 'Recebimento de vendas anteriores' não encontrada. Aguarde a migration da versão 1.7.0.");
@@ -935,7 +957,7 @@ async function executeWhatsAppCommand(db,input){
     const debts=await listDebts(db);
     if(corporateAgreementAlias){
       const agreement=debts.find(d=>d.scope==="business"&&normalizeText(d.name)==="acordo societario");
-      if(!agreement)throw new Error("dívida empresarial 'Acordo societário' ainda não está disponível. Aguarde a migration da v1.7.5.");
+      if(!agreement)throw new Error("dívida empresarial 'Acordo societário' ainda não está disponível. Aguarde a migration da v1.7.6.");
       debtId=Number(agreement.id);
       nature="business_debt";
       obligationId=null;
@@ -1050,7 +1072,7 @@ async function recoverRecentOrphanWhatsAppPurchase(db,{supplierName,total,accoun
       "inventory",
       inventoryCategory.id,
       `Compra - ${orphan.supplier_name||supplierName}`,
-      "Compra lançada pelo WhatsApp · recuperação automática v1.7.5",
+      "Compra lançada pelo WhatsApp · recuperação automática v1.7.6",
       orphan.payment_method||method,
       "eventual",
       "posted",
