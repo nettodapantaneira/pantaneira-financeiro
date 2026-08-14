@@ -1,6 +1,6 @@
 {
   "name": "pantaneira-financeiro",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,5 +12,7 @@
     "db:query:local": "wrangler d1 execute DB --local --command",
     "db:query:remote": "wrangler d1 execute DB --remote --command"
   },
-  "devDependencies": { "wrangler": "^4.0.0" }
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
 }

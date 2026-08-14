@@ -1,0 +1,28 @@
+PANTANEIRA FINANCEIRO v1.8.2 — COMPRA NO CARTÃO PELO WHATSAPP
+
+Objetivo
+- Permitir lançar compras feitas no Cartão Mercado Pago diretamente pelo WhatsApp.
+- Não reduzir o saldo bancário no momento da compra.
+- Colocar automaticamente a compra na fatura correta conforme o fechamento do cartão.
+- Cartão configurado: fecha dia 11 e vence dia 17.
+- Criar a próxima fatura automaticamente quando necessário.
+- Classificar compra como Pessoal ou Empresa.
+- Para compras pessoais de casa/planta/decoração, cria/usa a categoria "Casa e decoração".
+
+Comandos aceitos
+- compra 80 planta para casa credito mercado pago pessoal
+- gasto 80 planta para casa credito mercado pago pessoal
+- 14/08 compra 80 planta para casa credito mercado pago pessoal
+- compra 250 estoque credito mercado pago empresa
+- compra 50 facebook credito mercado pago empresa categoria Marketing e publicidade
+
+Exemplo de 14/08/2026
+Como o cartão fecha dia 11, a compra entra automaticamente na fatura set/2026, vencendo em 17/09/2026.
+
+Resposta esperada
+Compra no cartão registrada: R$ 80,00 · planta para casa · Pessoal · Casa e decoração
+Fatura: set/2026 · vence 17/09/2026
+Saldo bancário não foi alterado agora.
+
+Não há migration nova nesta versão.
+O bot já encaminha comandos iniciados por "compra", "comprei", "gasto" e "gastei"; portanto não é necessário alterar o Worker do chatbot.
