@@ -1,0 +1,36 @@
+PANTANEIRA FINANCEIRO v1.8.0 — COMPROMISSOS + CARTÕES E FATURAS
+
+ARQUIVOS DESTA ATUALIZAÇÃO
+- migrations/0012_v1_8_0_compromissos_cartoes.sql
+- src/worker-v180.js
+- public/v180.js
+- public/sw.js
+- wrangler.jsonc
+- package.json
+
+IMPORTANTE
+- Mantenha o src/worker.js atual no repositório. O novo worker-v180.js importa e preserva toda a v1.7.7/v1.7.8 existente.
+- Não apague migrations antigas.
+- O deploy atual da Cloudflare já aplica migrations remotas antes do wrangler deploy.
+
+PRINCIPAIS MUDANÇAS
+1. “Dívidas” passa visualmente a “Compromissos”.
+2. “Dívidas antigas” passa a “Compromissos anteriores”.
+3. Nova área Cartões e faturas, com cartão de uso misto Empresa/Pessoal.
+4. Fatura: total, competência, fechamento, vencimento, pago, restante e status.
+5. Pagamento parcial e edição/cancelamento com histórico.
+6. Compras da fatura classificadas individualmente como Empresa ou Pessoal e por categoria.
+7. Pagamento da fatura movimenta a conta uma única vez; detalhamento das compras não duplica a saída do caixa.
+8. Fatura em aberto entra nos compromissos do caixa pelo saldo restante.
+9. WhatsApp passa a aceitar rendimento do Mercado Pago sem classificar como venda:
+   entrou 1,44 rendimento mercado pago
+10. Categoria Rendimentos financeiros garantida pela migration.
+
+PRIMEIRA FATURA REAL PARA CADASTRO APÓS O DEPLOY
+- Cartão: Mercado Pago
+- Competência: Agosto/2026
+- Total: R$ 565,89
+- Vencimento: 17/08/2026
+- Pagamento já realizado: R$ 150,00
+- Conta usada no pagamento: Mercado Pago
+- Restante esperado: R$ 415,89
