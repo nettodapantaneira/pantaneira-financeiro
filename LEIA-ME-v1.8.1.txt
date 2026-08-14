@@ -1,0 +1,23 @@
+PANTANEIRA FINANCEIRO v1.8.1 — HOTFIX DE INTEGRAÇÃO
+
+Corrige o problema da v1.8.0 em que "Conta usada para pagar" ficava vazia.
+Causa: app.js roda como ES Module; state/loadAll não ficam globais para o overlay v180.js.
+
+Correções:
+- Carrega contas diretamente pela API e disponibiliza ao módulo de Compromissos.
+- Mercado Pago volta a aparecer em Conta usada para pagar.
+- Usa Mercado Pago como sugestão quando a fatura é do Cartão Mercado Pago.
+- Corrige Conta preferencial no cadastro/edição do cartão.
+- Corrige carregamento das categorias ao detalhar compras de cartão.
+- Carrega contas, categorias, contas a pagar e compromissos anteriores de forma independente.
+- Mantém v1.8.0 e todas as APIs existentes; não há migration nova.
+
+Arquivos deste hotfix:
+/public/v181.js
+/public/sw.js
+/src/worker-v181.js
+/wrangler.jsonc
+/package.json
+/LEIA-ME-v1.8.1.txt
+
+Não apagar worker-v180.js nem v180.js.
