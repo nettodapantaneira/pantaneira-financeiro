@@ -1,0 +1,72 @@
+PANTANEIRA FINANCEIRO v1.9.1 — DATA REAL + CATEGORIAS ORGANIZADAS
+
+1. PAGAMENTO DE COMPROMISSO COM DATA REAL
+Em Compromissos → Acordos e financiamentos → Registrar pagamento:
+- Valor
+- Data real do pagamento
+- Conta de saída
+- Forma
+- Observação
+
+Para pagamentos posteriores à fotografia inicial, a conta é descontada normalmente.
+Para datas anteriores/iguais à fotografia inicial, o app exige confirmação e registra
+como histórico, sem descontar novamente o saldo bancário atual.
+
+2. CATEGORIAS REORGANIZADAS
+A migration 0013:
+- arquiva duplicatas exatas e reaponta os lançamentos para a categoria canônica;
+- consolida "Receita de vendas" em "Vendas da loja";
+- arquiva "Acordos pessoais" como categoria legada;
+- preserva o histórico;
+- organiza as categorias em grupos profissionais.
+
+EMPRESA · OPERAÇÃO
+- Estrutura e ocupação
+- Equipe e administração
+- Operação da loja
+- Marketing e vendas
+- Financeiro e taxas
+- Manutenção e serviços
+
+EMPRESA · COMPRAS / ESTOQUE
+- Compras e estoque
+
+PESSOAL
+- Casa e moradia
+- Alimentação pessoal
+- Mobilidade e viagens
+- Família e compromissos
+- Saúde e desenvolvimento
+- Compras e lazer
+- Pets
+
+RECEITAS
+- Receitas
+
+ACORDOS / FINANCIAMENTOS
+- Acordos e financiamentos
+
+3. DENTRO DO APP
+Os selects de categoria passam a aparecer em grupos, com as subcategorias alinhadas.
+Categorias-pai são tratadas visualmente como GRUPO.
+O relatório também usa a mesma organização.
+
+4. NÃO PERDE HISTÓRICO
+A deduplicação reaponta:
+- transactions
+- obligations
+- expense_templates
+- purchases
+- credit_card_items
+
+5. INSTALAÇÃO
+Subir preservando os caminhos:
+- migrations/0013_v1_9_1_categorias_organizadas.sql
+- src/worker-v191.js
+- public/v191.js
+- public/sw.js
+- wrangler.jsonc
+- package.json
+- LEIA-ME-v1.9.1.txt
+
+A Cloudflare já está configurada para executar migrations e depois deploy.
