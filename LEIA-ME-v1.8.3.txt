@@ -1,0 +1,38 @@
+PANTANEIRA FINANCEIRO v1.8.3 — CORREÇÃO DE CLASSIFICAÇÃO WHATSAPP
+
+PROBLEMA IDENTIFICADO
+Na v1.7.5 o Acordo societário passou a ter creditor=NULL.
+O parser antigo fazia:
+  texto.includes(normalizeText(debt.creditor || ""))
+Quando creditor era NULL, isso virava texto.includes(""), que é sempre verdadeiro.
+Resultado: saídas comuns do WhatsApp podiam ser vinculadas indevidamente a uma dívida,
+alterando natureza/categoria e também reduzindo o saldo da dívida.
+
+EXEMPLOS OBSERVADOS
+- Facebook / Marketing e publicidade aparecendo como Empresa · dívida / Empréstimos e acordos.
+- Doação aparecendo como dívida.
+- Material de expediente aparecendo como dívida.
+
+O QUE A v1.8.3 FAZ
+1. Corrige automaticamente lançamentos já afetados quando:
+   - foram lançados pelo WhatsApp;
+   - estão vinculados a dívida com credor vazio;
+   - o texto não contém nome real da dívida nem termos claros de dívida/acordo;
+   - existe categoria real reconhecível.
+2. Restaura o saldo da dívida que foi abatido indevidamente.
+3. Remove o vínculo falso com a dívida.
+4. Preserva pagamento real de acordo, Chico, empréstimo, financiamento e parcelas.
+5. Para novos comandos, se o Worker legado ainda produzir um falso vínculo, a v1.8.3
+   corrige imediatamente antes de devolver a resposta ao bot.
+6. Mantém a v1.8.2: compras no cartão Mercado Pago pelo WhatsApp continuam funcionando.
+
+NÃO HÁ MIGRATION NOVA.
+O reparo é idempotente e roda uma única vez, controlado pela tabela settings.
+
+TESTE RECOMENDADO APÓS DEPLOY
+- Atualizar o app com Ctrl+F5.
+- Abrir Análises e conferir:
+  * suporte/tripé -> Material de expediente / Empresa · operação
+  * Facebook -> Marketing e publicidade / Empresa · operação
+  * doação -> Doações / Retirada pessoal
+- Fazer um novo gasto pequeno real pelo WhatsApp e conferir a categoria.
