@@ -1,0 +1,107 @@
+PANTANEIRA FINANCEIRO v1.9.0 — RELATÓRIOS PROFISSIONAIS
+
+Objetivo
+Transformar a consulta financeira em uma central profissional de relatórios, sem misturar análise visual com edição de lançamentos.
+
+Referências de produto consideradas
+- Conta Azul: relatórios financeiros centralizados, fluxo de caixa diário/mensal e análise por categorias.
+- Xero: Executive Summary, Account Transactions e drill-down para dados de origem.
+- QuickBooks: relatórios filtráveis e impressão/salvamento em PDF.
+
+NOVO MENU
+- Relatórios (separado de Análises)
+
+RELATÓRIOS
+1. Visão executiva
+   - Faturamento de vendas
+   - Entradas totais
+   - Saídas de caixa
+   - Resultado de caixa
+   - Resultado operacional gerencial
+   - Retiradas pessoais
+   - Compras/estoque
+   - Taxas financeiras
+   - comparação automática com período anterior
+   - evolução diária/mensal
+   - saldo atual por conta
+   - qualidade dos dados
+
+2. Fluxo de caixa
+   - diário
+   - entradas
+   - saídas
+   - transferências
+   - resultado do dia
+   - acumulado
+   - ao filtrar uma conta, transferências passam a afetar o fluxo daquela conta
+
+3. Movimentações
+   - caixa + compras no cartão
+   - data, descrição, tipo, escopo, categoria, conta/cartão, forma e valor
+   - histórico reconstruído identificado
+
+4. Categorias
+   - caixa
+   - cartão
+   - visão gerencial
+   - ranking e drill-down
+   - pagamento de fatura não é contado duas vezes
+
+5. Cartões e faturas
+   - total
+   - empresa
+   - pessoal
+   - a detalhar
+   - pago
+   - restante
+   - status e vencimento
+
+6. Compromissos
+   - contas/compromissos ativos
+   - acordos e financiamentos
+   - valor de referência/saldo
+   - pago no período
+
+FILTROS
+- Hoje
+- Ontem
+- 7 dias
+- Mês atual
+- Mês anterior
+- 90 dias
+- Ano
+- data inicial/final
+- conta
+- Empresa/Pessoal
+- tipo de movimento
+- categoria
+- busca textual
+
+SAÍDAS
+- Exportar CSV (separador ;, compatível com Excel em pt-BR)
+- Imprimir / salvar em PDF via impressão do navegador
+- layout de impressão em paisagem
+
+QUALIDADE DOS DADOS
+Mostra:
+- faturas ainda "a detalhar"
+- lançamentos não identificados
+- pendentes de reclassificação
+- compras de cartão sem categoria
+- quantidade de lançamentos históricos reconstruídos
+
+REGRA IMPORTANTE
+"Resultado operacional" é gerencial e não substitui DRE fiscal/contábil.
+Compras detalhadas no cartão entram na análise gerencial pela data da compra.
+O pagamento da fatura continua aparecendo no fluxo de caixa, mas é neutralizado na visão gerencial de categorias para evitar duplicidade.
+
+INSTALAÇÃO
+Overlay sobre a v1.8.3.
+Não há migration nova.
+Suba os arquivos na raiz do repositório preservando:
+- /src/worker-v190.js
+- /public/v190.js
+- /public/sw.js
+- /wrangler.jsonc
+- /package.json
+- /LEIA-ME-v1.9.0.txt
