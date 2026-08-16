@@ -1,5 +1,3 @@
-PRAGMA foreign_keys = ON;
-
 -- Pantaneira Financeiro v1.9.1
 -- Organização profissional das categorias sem perder o histórico.
 -- Também arquiva duplicatas exatas e categorias legadas que não devem
