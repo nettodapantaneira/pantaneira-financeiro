@@ -1,35 +1,36 @@
 /* =========================================================
-   PANTANEIRA FINANCEIRO — VISUAL v1.9.2
-   Direção: clara, moderna, financeira e operacional.
-   Apenas apresentação. Não altera regras ou dados.
+   PANTANEIRA FINANCEIRO
+   Refinamento visual — direção clara e profissional
+   Base funcional: v1.9.1
    ========================================================= */
 
 :root{
   --pf-primary:#4057e8;
-  --pf-primary-strong:#3047d7;
+  --pf-primary-dark:#3046c9;
   --pf-primary-soft:#eef1ff;
 
-  --pf-green:#168a4a;
+  --pf-green:#16894a;
   --pf-green-soft:#eaf8ef;
 
-  --pf-red:#c7443e;
+  --pf-red:#c94843;
   --pf-red-soft:#fff0ef;
 
-  --pf-amber:#a86a00;
+  --pf-amber:#a66a00;
   --pf-amber-soft:#fff7df;
 
-  --pf-blue-soft:#edf7ff;
+  --pf-cyan:#277ebc;
+  --pf-cyan-soft:#edf7ff;
 
-  --pf-bg:#f5f7fb;
+  --pf-bg:#f4f7fb;
   --pf-surface:#ffffff;
-  --pf-surface-soft:#fafbfe;
+  --pf-surface-soft:#f8fafe;
 
   --pf-text:#172033;
-  --pf-muted:#6f7b91;
-  --pf-border:#e2e7f0;
+  --pf-muted:#707c92;
+  --pf-border:#e0e6ef;
 
-  --pf-shadow:0 8px 24px rgba(26,39,68,.055);
-  --pf-shadow-hover:0 14px 34px rgba(26,39,68,.095);
+  --pf-shadow:0 8px 24px rgba(25,39,69,.055);
+  --pf-shadow-hover:0 14px 32px rgba(25,39,69,.095);
 }
 
 /* =========================================================
@@ -47,79 +48,124 @@ body{
 
 main{
   background:
-    radial-gradient(circle at 10% 0%,rgba(64,87,232,.035),transparent 26%),
-    var(--pf-bg);
+    radial-gradient(circle at 6% 0%,rgba(64,87,232,.045),transparent 24%),
+    linear-gradient(180deg,#f5f8fd 0%,#f3f6fb 100%);
 }
 
 /* =========================================================
-   SIDEBAR DESKTOP — CLARA
+   DESKTOP
    ========================================================= */
 
 @media(min-width:980px){
 
   #app{
-    grid-template-columns:246px minmax(0,1fr);
+    grid-template-columns:252px minmax(0,1fr);
   }
+
+  /* SIDEBAR */
 
   .desktop-sidebar{
-    background:#ffffff;
-    border-right:1px solid #e5e9f1;
-    padding:20px 14px 18px;
-    box-shadow:5px 0 22px rgba(28,39,64,.025);
+    position:relative;
+
+    background:
+      linear-gradient(180deg,#fbfdff 0%,#f5f8fd 100%);
+
+    border-right:1px solid #dfe5ef;
+
+    padding:20px 15px 18px;
+
+    box-shadow:
+      5px 0 24px rgba(27,42,75,.035);
   }
 
+  .desktop-sidebar:after{
+    content:"";
+
+    position:absolute;
+
+    right:-1px;
+    top:0;
+    bottom:0;
+
+    width:1px;
+
+    background:
+      linear-gradient(
+        180deg,
+        rgba(64,87,232,.10),
+        rgba(64,87,232,0) 40%
+      );
+  }
+
+  /* MARCA */
+
   .sidebar-logo{
-    padding:2px 10px 22px;
-    margin-bottom:13px;
-    border-bottom:1px solid #edf0f5;
+    padding:3px 10px 22px;
+
+    margin-bottom:14px;
+
+    border-bottom:1px solid #e8edf4;
+
     gap:12px;
   }
 
   .sidebar-logo .brand-mini{
-    width:46px;
-    height:46px;
-    border-radius:14px;
+    width:48px;
+    height:48px;
+
+    border-radius:15px;
 
     background:
-      linear-gradient(145deg,#283c78,#4057e8);
+      linear-gradient(145deg,#3046c9,#5369ef);
 
-    color:#ffffff;
+    color:#fff;
+
     border:0;
 
     box-shadow:
-      0 8px 18px rgba(64,87,232,.20);
+      0 9px 20px rgba(64,87,232,.23);
 
-    font-size:21px;
+    font-size:22px;
   }
 
   .sidebar-logo span{
-    color:#8993a6;
+    color:#7c8aa3;
+
     font-size:9px;
-    letter-spacing:.16em;
+
+    letter-spacing:.17em;
+
+    font-weight:800;
   }
 
   .sidebar-logo strong{
-    color:#172033;
-    font-size:18px;
-    font-weight:850;
-    letter-spacing:-.025em;
+    color:#162137;
+
+    font-size:19px;
+
+    font-weight:900;
+
+    letter-spacing:-.03em;
   }
 
+  /* MENU */
+
   .sidebar-nav{
-    gap:6px;
+    gap:7px;
   }
 
   .sidebar-nav button{
     position:relative;
 
-    min-height:52px;
+    min-height:53px;
 
     padding:8px 10px;
 
     border:1px solid transparent;
-    border-radius:14px;
 
-    color:#667188;
+    border-radius:15px;
+
+    color:#66738b;
 
     background:transparent;
 
@@ -132,21 +178,23 @@ main{
   }
 
   .sidebar-nav button:hover{
-    background:#f5f7fb;
-    color:#26344f;
+    background:#edf2f9;
+
+    color:#273753;
+
     transform:translateX(2px);
   }
 
   .sidebar-nav button.active{
-    color:#3047d7;
+    color:#3046c9;
 
     background:
-      linear-gradient(135deg,#eef1ff,#f5f6ff);
+      linear-gradient(135deg,#e9edff,#f3f5ff);
 
-    border-color:#dce2ff;
+    border-color:#d5ddff;
 
     box-shadow:
-      0 6px 16px rgba(64,87,232,.075);
+      0 7px 18px rgba(64,87,232,.09);
   }
 
   .sidebar-nav button.active:before{
@@ -154,54 +202,96 @@ main{
 
     position:absolute;
 
-    left:-14px;
-    top:10px;
-    bottom:10px;
+    left:-15px;
+
+    top:11px;
+    bottom:11px;
 
     width:4px;
 
     border-radius:0 5px 5px 0;
 
-    background:#4057e8;
+    background:
+      linear-gradient(180deg,#4057e8,#6b7cf4);
   }
 
   .sidebar-nav button span{
-    width:35px;
-    height:35px;
+    width:36px;
+    height:36px;
 
     display:grid;
     place-items:center;
 
     border-radius:11px;
 
-    background:#f3f5f9;
+    background:#edf1f7;
 
-    color:#72809a;
+    color:#6f7e99;
 
     font-size:17px;
 
     transition:.16s ease;
   }
 
+  .sidebar-nav button:hover span{
+    background:#fff;
+  }
+
   .sidebar-nav button.active span{
     color:#4057e8;
-    background:#ffffff;
+
+    background:#fff;
 
     box-shadow:
-      0 3px 10px rgba(64,87,232,.11);
+      0 4px 11px rgba(64,87,232,.12);
   }
 
   .sidebar-nav button b{
     font-size:13px;
-    font-weight:760;
+
+    font-weight:800;
   }
 
+  /* ÍCONES COM LEVE IDENTIDADE */
+
+  .sidebar-nav button:nth-child(2) span{
+    color:#16894a;
+    background:#edf8f1;
+  }
+
+  .sidebar-nav button:nth-child(3) span{
+    color:#4057e8;
+    background:#eef1ff;
+  }
+
+  .sidebar-nav button:nth-child(4) span{
+    color:#a66a00;
+    background:#fff7df;
+  }
+
+  .sidebar-nav button:nth-child(5) span{
+    color:#8a52bd;
+    background:#f6effd;
+  }
+
+  .sidebar-nav button:nth-child(6) span{
+    color:#277ebc;
+    background:#edf7ff;
+  }
+
+  .sidebar-nav button.active span{
+    color:#4057e8;
+    background:#fff;
+  }
+
+  /* RODAPÉ */
+
   .sidebar-foot{
-    border-top:1px solid #edf0f5;
+    border-top:1px solid #e7ecf3;
 
-    padding:17px 10px 3px;
+    padding:17px 10px 4px;
 
-    color:#9aa3b3;
+    color:#97a2b4;
   }
 
   .sidebar-foot small{
@@ -209,72 +299,75 @@ main{
   }
 
   .sidebar-foot strong{
-    color:#647189;
+    color:#56647d;
 
     font-size:11px;
-    font-weight:800;
+
+    font-weight:850;
   }
 
-  /* =======================================================
-     TOPBAR
-     ======================================================= */
+  /* TOPBAR */
 
   .topbar{
     height:72px;
 
-    padding-left:30px;
-    padding-right:28px;
+    padding-left:31px;
+    padding-right:29px;
 
-    background:rgba(255,255,255,.91);
+    background:rgba(255,255,255,.92);
 
     backdrop-filter:blur(16px);
 
-    border-bottom:1px solid #e7eaf0;
+    border-bottom:1px solid #e3e8f0;
 
     box-shadow:
-      0 2px 11px rgba(27,38,64,.025);
+      0 3px 14px rgba(27,40,69,.025);
   }
 
   .topbar-title{
-    color:#192338;
+    color:#182238;
 
-    font-size:19px;
-    font-weight:850;
+    font-size:20px;
 
-    letter-spacing:-.02em;
+    font-weight:900;
+
+    letter-spacing:-.025em;
   }
 
   .icon-btn{
     width:42px;
     height:42px;
 
-    background:#f5f7fa;
+    background:#f3f6fa;
 
-    border:1px solid #e4e8ef;
+    border:1px solid #e1e6ed;
 
-    color:#5f6b80;
+    color:#59677e;
   }
 
   .icon-btn:hover{
-    background:#edf1f6;
+    background:#eaf0f7;
+
+    border-color:#d7dde7;
   }
 
   main{
-    padding:27px 30px 80px;
+    padding:28px 30px 80px;
   }
 }
 
 /* =========================================================
-   DASHBOARD — CONTEÚDO
+   DASHBOARD
    ========================================================= */
 
 .mp-dashboard{
-  max-width:1320px;
+  max-width:1340px;
+
   margin:0 auto;
 }
 
 /* =========================================================
-   CARD PRINCIPAL DE SALDO
+   CARD PRINCIPAL
    ========================================================= */
 
 .mp-balance-card{
@@ -283,13 +376,18 @@ main{
   overflow:hidden;
 
   background:
-    linear-gradient(145deg,#ffffff 0%,#ffffff 72%,#fafbff 100%);
+    linear-gradient(
+      145deg,
+      #ffffff 0%,
+      #ffffff 68%,
+      #f8faff 100%
+    );
 
-  border:1px solid #dfe4ed;
+  border:1px solid #dce3ed;
+
+  border-radius:26px;
 
   box-shadow:var(--pf-shadow);
-
-  border-radius:25px;
 }
 
 .mp-balance-card:before{
@@ -297,52 +395,81 @@ main{
 
   position:absolute;
 
-  width:140px;
-  height:140px;
+  width:190px;
+  height:190px;
 
-  right:-60px;
-  top:-55px;
+  right:-90px;
+  top:-95px;
 
   border-radius:50%;
 
   background:
-    radial-gradient(circle,rgba(64,87,232,.10),rgba(64,87,232,0));
+    radial-gradient(
+      circle,
+      rgba(64,87,232,.12),
+      rgba(64,87,232,0) 68%
+    );
+}
+
+.mp-balance-card:after{
+  content:"";
+
+  position:absolute;
+
+  left:0;
+
+  top:29px;
+
+  width:4px;
+  height:64px;
+
+  border-radius:0 5px 5px 0;
+
+  background:
+    linear-gradient(180deg,#4057e8,#7584f2);
+}
+
+.mp-cash-now{
+  position:relative;
+  z-index:1;
 }
 
 .mp-cash-now>span{
-  color:#788398;
+  color:#738096;
 
   font-size:10px;
-  font-weight:800;
+
+  font-weight:850;
 
   letter-spacing:.14em;
 }
 
 .mp-cash-now>strong{
-  color:#101a31;
+  color:#101a30;
 
-  font-size:44px;
-  font-weight:900;
+  font-size:45px;
 
-  letter-spacing:-.045em;
+  font-weight:950;
+
+  letter-spacing:-.05em;
 
   margin-top:2px;
 }
 
 .mp-cash-now>small{
-  color:#8791a2;
+  color:#8390a4;
 }
 
 /* =========================================================
-   CARDS DE HORIZONTE
+   HORIZONTES
    ========================================================= */
 
 .mp-horizon-grid{
-  gap:13px;
+  gap:14px;
 }
 
 .mp-horizon-box{
-  border-radius:19px;
+  border-radius:20px;
 
   border:1px solid var(--pf-border);
 
@@ -351,56 +478,65 @@ main{
 
 .mp-horizon-box.current{
   background:
-    linear-gradient(145deg,#fbfcff,#f6f8ff);
+    linear-gradient(145deg,#f9fbff,#f4f7ff);
+
+  border-color:#dce3f2;
 }
 
 .mp-horizon-box.future{
   background:
-    linear-gradient(145deg,#fffefa,#fff9ea);
+    linear-gradient(145deg,#fffefa,#fff8e5);
 
-  border-color:#eee1bb;
+  border-color:#ebddb4;
 }
 
 .mp-horizon-box>span{
-  color:#788398;
+  color:#778399;
+
+  font-weight:800;
 }
 
 .mp-horizon-box>strong{
-  color:#192339;
+  color:#182238;
 
-  font-size:25px;
+  font-size:26px;
 
-  letter-spacing:-.025em;
+  font-weight:900;
+
+  letter-spacing:-.03em;
 }
 
 .mp-horizon-result{
-  border-top-color:#e9edf3;
-}
-
-.mp-horizon-result strong{
-  font-weight:850;
+  border-top-color:#e7ebf1;
 }
 
 /* =========================================================
-   RESUMOS INFERIORES DO CARD
+   RODAPÉ DO CARD PRINCIPAL
    ========================================================= */
 
-.mp-balance-foot > div{
-  background:#f8f9fc;
+.mp-balance-foot{
+  gap:10px;
+}
 
-  border:1px solid #eef1f5;
+.mp-balance-foot>div{
+  padding:12px 14px;
 
-  border-radius:13px;
+  background:
+    linear-gradient(145deg,#f8fafe,#f5f7fb);
 
-  padding:11px 13px;
+  border:1px solid #edf0f5;
+
+  border-radius:14px;
 }
 
 .mp-balance-foot span{
-  color:#858fa1;
+  color:#8490a3;
 }
 
 .mp-balance-foot strong{
-  color:#24304a;
+  color:#26324a;
+
+  font-weight:850;
 }
 
 /* =========================================================
@@ -408,28 +544,48 @@ main{
    ========================================================= */
 
 .mp-quick-actions{
-  gap:11px;
+  gap:12px;
 
   margin-top:15px;
-  margin-bottom:26px;
+  margin-bottom:27px;
 }
 
 .mp-quick-actions button{
-  min-height:100px;
+  position:relative;
 
-  background:#ffffff;
+  overflow:hidden;
 
-  border:1px solid #e1e6ef;
+  min-height:104px;
 
-  border-radius:19px;
+  background:#fff;
+
+  border:1px solid #dfe5ee;
+
+  border-radius:20px;
 
   box-shadow:
-    0 4px 13px rgba(27,39,65,.035);
+    0 4px 14px rgba(28,40,67,.035);
 
   transition:
-    transform .16s ease,
-    box-shadow .16s ease,
-    border-color .16s ease;
+    transform .17s ease,
+    box-shadow .17s ease,
+    border-color .17s ease;
+}
+
+.mp-quick-actions button:after{
+  content:"";
+
+  position:absolute;
+
+  left:18px;
+  right:18px;
+  bottom:0;
+
+  height:3px;
+
+  border-radius:4px 4px 0 0;
+
+  opacity:.45;
 }
 
 .mp-quick-actions button:hover{
@@ -437,27 +593,33 @@ main{
 
   box-shadow:var(--pf-shadow-hover);
 
-  border-color:#d4dae6;
+  border-color:#d2d9e6;
 }
 
 .mp-quick-actions button>span{
-  width:39px;
-  height:39px;
+  width:40px;
+  height:40px;
 
   display:grid;
   place-items:center;
 
-  border-radius:12px;
+  border-radius:13px;
 
   margin-bottom:4px;
 
   font-size:21px;
 }
 
-/* Entrada */
+/* ENTRADA */
+
+.mp-quick-actions button:nth-child(1){
+  background:
+    linear-gradient(180deg,#fff 0%,#fbfffc 100%);
+}
 
 .mp-quick-actions button:nth-child(1)>span{
   background:var(--pf-green-soft);
+
   color:var(--pf-green);
 }
 
@@ -465,69 +627,105 @@ main{
   color:#14783f;
 }
 
-/* Saída */
+.mp-quick-actions button:nth-child(1):after{
+  background:var(--pf-green);
+}
+
+/* SAÍDA */
+
+.mp-quick-actions button:nth-child(2){
+  background:
+    linear-gradient(180deg,#fff 0%,#fffafa 100%);
+}
 
 .mp-quick-actions button:nth-child(2)>span{
   background:var(--pf-red-soft);
+
   color:var(--pf-red);
 }
 
 .mp-quick-actions button:nth-child(2) b{
-  color:#a83b35;
+  color:#a93d37;
 }
 
-/* Compra */
+.mp-quick-actions button:nth-child(2):after{
+  background:var(--pf-red);
+}
+
+/* COMPRA */
+
+.mp-quick-actions button:nth-child(3){
+  background:
+    linear-gradient(180deg,#fff 0%,#fbfbff 100%);
+}
 
 .mp-quick-actions button:nth-child(3)>span{
   background:var(--pf-primary-soft);
+
   color:var(--pf-primary);
 }
 
 .mp-quick-actions button:nth-child(3) b{
-  color:#3d50ce;
+  color:#3c50d0;
 }
 
-/* Transferência */
+.mp-quick-actions button:nth-child(3):after{
+  background:var(--pf-primary);
+}
+
+/* TRANSFERIR */
+
+.mp-quick-actions button:nth-child(4){
+  background:
+    linear-gradient(180deg,#fff 0%,#fafdff 100%);
+}
 
 .mp-quick-actions button:nth-child(4)>span{
-  background:var(--pf-blue-soft);
-  color:#347ac2;
+  background:var(--pf-cyan-soft);
+
+  color:var(--pf-cyan);
 }
 
 .mp-quick-actions button:nth-child(4) b{
-  color:#3978b8;
+  color:#3278b2;
+}
+
+.mp-quick-actions button:nth-child(4):after{
+  background:var(--pf-cyan);
 }
 
 .mp-quick-actions button b{
   font-size:13px;
-  font-weight:850;
+
+  font-weight:900;
 }
 
 .mp-quick-actions button small{
-  color:#8a94a6;
+  color:#8994a7;
 
   font-size:9px;
 }
 
 /* =========================================================
-   TÍTULOS DE SEÇÃO
+   TÍTULOS
    ========================================================= */
 
 .mp-section-head{
-  margin-top:27px;
+  margin-top:28px;
 }
 
 .mp-section-head h2{
-  color:#192338;
+  color:#182238;
 
   font-size:20px;
-  font-weight:850;
+
+  font-weight:900;
 
   letter-spacing:-.025em;
 }
 
 .mp-section-head p{
-  color:#8a94a5;
+  color:#8995a7;
 }
 
 /* =========================================================
@@ -535,23 +733,23 @@ main{
    ========================================================= */
 
 .account-mini{
-  background:#ffffff;
+  background:#fff;
 
-  border:1px solid #e1e6ef;
+  border:1px solid #e0e5ee;
+
+  border-radius:16px;
 
   box-shadow:
-    0 3px 12px rgba(28,40,65,.025);
+    0 4px 14px rgba(27,39,66,.03);
 
-  border-radius:15px;
-
-  transition:.16s ease;
+  transition:.17s ease;
 }
 
 .account-mini:hover{
   transform:translateY(-2px);
 
   box-shadow:
-    0 9px 22px rgba(28,40,65,.07);
+    0 10px 24px rgba(27,39,66,.075);
 }
 
 /* =========================================================
@@ -559,34 +757,49 @@ main{
    ========================================================= */
 
 .mp-analysis-title span{
-  color:#8490a3;
+  color:#7e8ba1;
 
   font-size:10px;
+
+  font-weight:850;
 }
 
 .mp-analysis-title h2{
-  color:#172136;
+  color:#162035;
 
-  font-size:28px;
-  font-weight:900;
+  font-size:29px;
 
-  letter-spacing:-.035em;
+  font-weight:950;
+
+  letter-spacing:-.04em;
 }
 
 .mp-insights-column{
-  gap:15px;
+  gap:16px;
 }
 
 .mp-insight-card{
-  background:#ffffff;
+  position:relative;
 
-  border:1px solid #dfe4ed;
+  overflow:hidden;
 
-  border-radius:24px;
+  background:#fff;
+
+  border:1px solid #dce2ec;
+
+  border-radius:25px;
 
   box-shadow:var(--pf-shadow);
 
-  transition:.16s ease;
+  transition:.17s ease;
+}
+
+.mp-insight-card:first-child{
+  border-top:3px solid rgba(64,87,232,.65);
+}
+
+.mp-insight-card:nth-child(2){
+  border-top:3px solid rgba(220,55,164,.55);
 }
 
 .mp-insight-card:hover{
@@ -596,20 +809,13 @@ main{
 .mp-card-head h3{
   color:#172136;
 
-  font-weight:850;
+  font-weight:900;
 }
 
 .mp-card-head a{
-  color:var(--pf-primary);
-}
+  color:#4057e8;
 
-.mp-flow-values span{
-  color:#818da1;
-}
-
-.mp-flow-values strong{
-  font-weight:850;
-  letter-spacing:-.02em;
+  font-weight:800;
 }
 
 /* =========================================================
@@ -622,9 +828,9 @@ main{
 .personal-card,
 .protect-card,
 .metric{
-  background:#ffffff;
+  background:#fff;
 
-  border-color:#e1e6ef;
+  border-color:#e0e5ee;
 }
 
 .form-card,
@@ -632,7 +838,7 @@ main{
 .personal-card,
 .protect-card{
   box-shadow:
-    0 5px 17px rgba(27,39,65,.032);
+    0 5px 17px rgba(27,39,65,.033);
 }
 
 /* =========================================================
@@ -645,11 +851,15 @@ main{
 .dialog-body input,
 .dialog-body select,
 .dialog-body textarea{
-  background:#ffffff;
+  background:#fff;
 
-  border-color:#dce2eb;
+  border-color:#d9e0ea;
 
   color:#263149;
+
+  transition:
+    border-color .15s ease,
+    box-shadow .15s ease;
 }
 
 .form-card input:focus,
@@ -670,7 +880,7 @@ main{
 
 .btn.primary{
   background:
-    linear-gradient(135deg,#4057e8,#5368ee);
+    linear-gradient(135deg,#4057e8,#566bf0);
 
   border-color:#4057e8;
 
@@ -680,15 +890,7 @@ main{
 
 .btn.primary:hover{
   background:
-    linear-gradient(135deg,#354bd8,#485fe4);
-}
-
-/* =========================================================
-   SCROLLBAR DISCRETA
-   ========================================================= */
-
-*{
-  scrollbar-color:#c9d0dc transparent;
+    linear-gradient(135deg,#354bd7,#495fe4);
 }
 
 /* =========================================================
@@ -702,33 +904,33 @@ main{
   }
 
   .topbar{
-    background:#ffffff;
+    background:#fff;
 
     box-shadow:
-      0 2px 12px rgba(28,40,65,.035);
+      0 2px 12px rgba(27,39,65,.035);
   }
 
   .mp-balance-card{
     box-shadow:
-      0 7px 21px rgba(27,39,65,.055);
+      0 8px 22px rgba(27,39,65,.055);
   }
 
   .mp-quick-actions button{
-    min-height:88px;
+    min-height:90px;
   }
 
   .bottom-nav{
-    background:rgba(255,255,255,.97);
+    background:rgba(255,255,255,.98);
 
-    border-top:1px solid #e4e8ef;
+    border-top:1px solid #e3e7ee;
 
     box-shadow:
-      0 -7px 24px rgba(27,39,65,.075);
+      0 -8px 25px rgba(27,39,65,.075);
   }
 }
 
 /* =========================================================
-   TELAS PEQUENAS
+   MOBILE PEQUENO
    ========================================================= */
 
 @media(max-width:560px){
