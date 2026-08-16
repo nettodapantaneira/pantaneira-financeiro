@@ -1,0 +1,43 @@
+name: Pantaneira Financeiro - D1 Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Escolha a operação"
+        required: true
+        default: "list"
+        type: choice
+        options:
+          - list
+          - apply
+
+permissions:
+  contents: read
+
+jobs:
+  d1-migrations:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Conferir migrations pendentes
+        if: ${{ inputs.action == 'list' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.123.0 d1 migrations list pantaneira-financeiro-db --remote
+
+      - name: Aplicar migrations pendentes
+        if: ${{ inputs.action == 'apply' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.123.0 d1 migrations apply pantaneira-financeiro-db --remote
