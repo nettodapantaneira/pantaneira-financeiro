@@ -86,7 +86,7 @@
   async function init(){
     try{await loadRefs();}catch(e){console.warn('v1.8.1 refs',e);}
     observeDialogs();
-    document.querySelector('.sidebar-foot strong')?.replaceChildren(document.createTextNode('v'+V));
+    
     document.querySelectorAll('.metric strong').forEach(el=>{if(/^1\.8\.0$/.test(el.textContent.trim()))el.textContent=V;});
     repairPaymentDialog();repairCardDialog();
   }
