@@ -5,7 +5,7 @@
 
 -- 1) Deduplicação exata por nome + natureza, independentemente do parent_id.
 DROP TABLE IF EXISTS _v191_cat_map;
-CREATE TEMP TABLE _v191_cat_map AS
+CREATE TABLE _v191_cat_map AS
 SELECT c.id old_id,
        (
          SELECT MIN(c2.id)
