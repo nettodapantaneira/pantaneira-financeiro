@@ -1,0 +1,406 @@
+/* =========================================================
+   PANTANEIRA FINANCEIRO — MOBILE FINAL
+   Atua somente abaixo de 980px.
+   Não altera o desktop nem regras financeiras.
+   ========================================================= */
+
+@media(max-width:979px){
+
+  html,
+  body{
+    width:100%;
+    overflow-x:hidden;
+    background:#f5f7fb;
+  }
+
+  body{
+    font-size:14px;
+  }
+
+  main{
+    width:100%;
+    max-width:100%;
+    padding:
+      12px
+      12px
+      calc(90px + env(safe-area-inset-bottom));
+  }
+
+  /* TOPO */
+
+  .topbar{
+    min-height:58px;
+    height:58px;
+
+    padding:
+      env(safe-area-inset-top)
+      13px
+      0;
+
+    background:#fff;
+
+    border-bottom:1px solid #e5e9f0;
+  }
+
+  .topbar-title{
+    font-size:17px;
+    font-weight:800;
+  }
+
+  .icon-btn{
+    width:38px;
+    height:38px;
+  }
+
+  /* CABEÇALHO DA TELA */
+
+  .mobile-page-head{
+    margin:3px 0 13px;
+  }
+
+  .mobile-page-head span{
+    font-size:9px;
+    letter-spacing:.14em;
+  }
+
+  .mobile-page-head h1{
+    font-size:22px;
+    line-height:1.08;
+    margin-top:3px;
+  }
+
+  .mobile-page-head p{
+    font-size:11px;
+    margin-top:4px;
+  }
+
+  /* DASHBOARD */
+
+  .mp-dashboard{
+    width:100%;
+    max-width:100%;
+  }
+
+  /* CARD PRINCIPAL */
+
+  .mp-balance-card{
+    border-radius:18px;
+    padding:15px 14px;
+
+    box-shadow:
+      0 5px 17px rgba(27,39,65,.05);
+  }
+
+  .mp-balance-card:before{
+    top:19px;
+    height:54px;
+  }
+
+  .mp-cash-now>span{
+    font-size:9px;
+  }
+
+  .mp-cash-now>strong{
+    font-size:33px;
+    line-height:1;
+    margin-top:4px;
+  }
+
+  .mp-cash-now>small{
+    display:block;
+    margin-top:5px;
+    font-size:11px;
+  }
+
+  /* A COBRIR / PRÓXIMOS COMPROMISSOS */
+
+  .mp-horizon-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+
+    margin-top:13px;
+  }
+
+  .mp-horizon-box{
+    padding:13px 13px 11px;
+    border-radius:15px;
+  }
+
+  .mp-horizon-box>span{
+    font-size:9px;
+  }
+
+  .mp-horizon-box>strong{
+    font-size:21px;
+    margin-top:3px;
+  }
+
+  .mp-horizon-box>small{
+    font-size:10px;
+    line-height:1.25;
+  }
+
+  .mp-horizon-result{
+    margin-top:9px;
+    padding-top:8px;
+  }
+
+  .mp-horizon-result span{
+    font-size:9px;
+  }
+
+  .mp-horizon-result strong{
+    font-size:11px;
+  }
+
+  /* RESUMO DO CARD */
+
+  .mp-balance-foot{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:7px;
+
+    margin-top:11px;
+  }
+
+  .mp-balance-foot>div{
+    padding:9px 10px;
+    border-radius:11px;
+  }
+
+  .mp-balance-foot span{
+    font-size:8px;
+  }
+
+  .mp-balance-foot strong{
+    font-size:13px;
+  }
+
+  /* AÇÕES */
+
+  .mp-quick-actions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+
+    margin:10px 0 18px;
+  }
+
+  .mp-quick-actions button{
+    min-height:76px;
+    padding:9px 5px;
+
+    border-radius:15px;
+  }
+
+  .mp-quick-actions button>span{
+    width:32px;
+    height:32px;
+
+    border-radius:10px;
+
+    font-size:18px;
+
+    margin-bottom:2px;
+  }
+
+  .mp-quick-actions button b{
+    font-size:11px;
+  }
+
+  .mp-quick-actions button small{
+    font-size:8px;
+  }
+
+  /* TÍTULOS DE SEÇÃO */
+
+  .mp-section-head{
+    margin:18px 1px 8px;
+  }
+
+  .mp-section-head h2{
+    font-size:17px;
+  }
+
+  .mp-section-head p{
+    font-size:9px;
+    margin-top:2px;
+  }
+
+  .mp-section-head a{
+    font-size:9px;
+  }
+
+  /* CONTAS:
+     NÃO ESPREMER QUATRO CARDS NA MESMA LINHA */
+
+  .accounts-grid,
+  .mp-accounts-grid{
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:8px !important;
+  }
+
+  .account-mini{
+    min-width:0 !important;
+
+    padding:10px 9px !important;
+
+    border-radius:13px;
+  }
+
+  .account-mini span,
+  .account-mini small{
+    font-size:8px !important;
+  }
+
+  .account-mini strong{
+    font-size:13px !important;
+  }
+
+  /* RESERVAS */
+
+  .protect-card,
+  .mp-protect-card{
+    padding:13px !important;
+    border-radius:16px;
+  }
+
+  .protect-card h3,
+  .mp-protect-card h3{
+    font-size:12px;
+  }
+
+  .protect-card strong,
+  .mp-protect-card strong{
+    font-size:20px;
+  }
+
+  .protect-card .metric,
+  .mp-protect-card .metric{
+    min-height:auto;
+    padding:10px;
+  }
+
+  /* CARDS GERAIS */
+
+  .form-card,
+  .list-card,
+  .analysis-card,
+  .personal-card,
+  .protect-card,
+  .metric,
+  .mp-insight-card{
+    border-radius:15px;
+  }
+
+  /* COLUNA DE ANÁLISE VIRA BLOCO NORMAL */
+
+  .mp-analysis-title{
+    margin-top:20px;
+  }
+
+  .mp-analysis-title h2{
+    font-size:22px;
+  }
+
+  .mp-insights-column{
+    gap:10px;
+  }
+
+  .mp-insight-card{
+    padding:13px;
+  }
+
+  /* EXTRATO / LISTAS */
+
+  .transaction-row,
+  .list-row{
+    padding:11px 10px;
+  }
+
+  /* BOTÃO FLUTUANTE */
+
+  .fab,
+  .floating-action{
+    width:48px;
+    height:48px;
+
+    right:14px;
+
+    bottom:
+      calc(74px + env(safe-area-inset-bottom));
+
+    font-size:21px;
+  }
+
+  /* NAVEGAÇÃO INFERIOR */
+
+  .bottom-nav{
+    height:
+      calc(66px + env(safe-area-inset-bottom));
+
+    padding:
+      5px
+      4px
+      env(safe-area-inset-bottom);
+
+    background:rgba(255,255,255,.98);
+
+    border-top:1px solid #e2e7ef;
+
+    box-shadow:
+      0 -6px 20px rgba(27,39,65,.07);
+  }
+
+  .bottom-nav button{
+    min-width:0;
+    min-height:54px;
+
+    padding:4px 1px;
+
+    border-radius:11px;
+  }
+
+  .bottom-nav button span{
+    font-size:17px;
+  }
+
+  .bottom-nav button small,
+  .bottom-nav button b{
+    font-size:8px;
+    line-height:1.1;
+  }
+
+  .bottom-nav button.active{
+    background:#eef1ff;
+    color:#4057e8;
+  }
+}
+
+/* =========================================================
+   IPHONES MENORES
+   ========================================================= */
+
+@media(max-width:390px){
+
+  main{
+    padding-left:10px;
+    padding-right:10px;
+  }
+
+  .mp-cash-now>strong{
+    font-size:31px;
+  }
+
+  .accounts-grid,
+  .mp-accounts-grid{
+    gap:6px !important;
+  }
+
+  .bottom-nav button small,
+  .bottom-nav button b{
+    font-size:7px;
+  }
+}
