@@ -404,3 +404,98 @@
     font-size:7px;
   }
 }
+/* ==== HOTFIX OVERFLOW IPHONE ==== */
+html, body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+@media (max-width: 820px) {
+  body,
+  .app,
+  .app-shell,
+  .layout,
+  .main-content,
+  .content,
+  .content-area,
+  .dashboard,
+  .page,
+  .page-content,
+  .overview,
+  .overview-grid,
+  .hero-section,
+  .analysis-column,
+  .cards-section,
+  .panel,
+  .card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .layout,
+  .app-shell,
+  .dashboard,
+  .overview-grid,
+  .page-content {
+    overflow-x: hidden !important;
+  }
+
+  /* grids mobile */
+  .quick-actions,
+  .actions-grid,
+  .accounts-grid,
+  .summary-grid,
+  .stats-grid,
+  .cards-grid {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .quick-actions,
+  .actions-grid,
+  .accounts-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .summary-grid,
+  .stats-grid,
+  .cards-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* impedir que textos/cards estourem */
+  .card,
+  .panel,
+  .summary-card,
+  .action-card,
+  .account-card,
+  .chart-card,
+  .hero-card {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* barra inferior */
+  .bottom-nav,
+  .mobile-nav {
+    left: 12px;
+    right: 12px;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  /* botão flutuante */
+  .fab,
+  .floating-action-button {
+    right: 20px;
+    bottom: 96px;
+  }
+}
