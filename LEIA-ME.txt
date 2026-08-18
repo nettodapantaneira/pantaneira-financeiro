@@ -1,0 +1,39 @@
+PANTANEIRA FINANCEIRO v1.9.4 FINAL
+
+NÃO USE O PACOTE v1.9.4 ANTERIOR.
+
+Arquivos:
+- /wrangler.jsonc
+- /src/worker-v194.js
+- /public/v194.js
+
+O que esta versão faz:
+1. Mantém a v1.9.3 como base.
+2. Impede que venda bruta de CRÉDITO/DÉBITO seja lançada como saldo da conta Mercado Pago.
+3. No Mercado Pago, o saldo bancário deve receber somente a LIBERAÇÃO LÍQUIDA real.
+4. Não cria nova taxa quando você registra "entrou X liberacao mercado pago".
+5. Melhora "acordo" curto:
+   paguei 38 acordo pix nubank
+   -> acordo societário.
+6. Permite data retroativa em entradas/saídas comuns após 10/08,
+   preservando auditoria da mudança da data.
+7. Mantém compras no CARTÃO Mercado Pago no módulo de faturas,
+   sem reduzir o saldo bancário no momento da compra.
+8. A tela Relatórios já possui Imprimir/PDF e Exportar CSV na v1.9.0.
+   Esta versão não cria botões duplicados.
+9. Nenhuma migration D1.
+10. Não altera automaticamente nenhum lançamento antigo ou saldo existente.
+
+Exemplo correto para uma liberação líquida real:
+entrou 180,38 liberacao mercado pago
+
+Exemplo que passa a ser bloqueado:
+venda 182 debito mercado pago
+
+Motivo:
+R$ 182,00 = venda bruta
+R$ 1,62 = taxa
+R$ 180,38 = valor líquido efetivamente liberado no banco
+
+A taxa pode continuar existindo nos relatórios de custo, mas não pode
+ser descontada novamente do saldo depois da liberação líquida.
