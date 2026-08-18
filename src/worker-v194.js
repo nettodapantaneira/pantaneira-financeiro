@@ -1,18 +1,20 @@
-import worker193 from './worker-v193.js';
+import worker192 from './worker-v192.js';
 
 const VERSION = '1.9.4';
-const TZ = 'America/Cuiaba';
+const SYSTEMS_CATEGORY = 'Sistemas e aplicativos';
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     try {
+      let forwardedRequest = request;
+
       if (url.pathname === '/api/internal/finance-command' && request.method === 'POST') {
-        return handleFinanceCommandV194(request, env, ctx);
+        forwardedRequest = await normalizeFinanceRequest(request);
       }
 
-      const res = await worker193.fetch(request, env, ctx);
+      const res = await worker192.fetch(forwardedRequest, env, ctx);
 
       if (url.pathname === '/api/health' && res.ok) {
         const data = await res.clone().json().catch(() => ({}));
@@ -20,6 +22,7 @@ export default {
       }
 
       const type = res.headers.get('content-type') || '';
+
       if (res.ok && type.includes('text/html')) {
         let html = await res.text();
 
@@ -51,267 +54,28 @@ export default {
         );
       }
 
-      return worker193.fetch(request, env, ctx);
+      /*
+       * Fallback idêntico ao padrão que já estava estável na v1.9.3:
+       * volta diretamente para a v1.9.2, sem encadear wrapper adicional.
+       */
+      return worker192.fetch(request, env, ctx);
     }
   }
 };
 
-async function handleFinanceCommandV194(request, env, ctx) {
+async function normalizeFinanceRequest(request) {
   const body = await request.clone().json().catch(() => null);
 
   if (!body || typeof body.text !== 'string') {
-    return worker193.fetch(request, env, ctx);
+    return request;
   }
 
-  let text = String(body.text || '').trim();
-  if (!text) {
-    return worker193.fetch(request, env, ctx);
+  const normalizedText = normalizeFinanceCommandText(body.text);
+
+  if (normalizedText === body.text) {
+    return request;
   }
 
-  /*
-   * REGRA MERCADO PAGO
-   *
-   * Crédito e débito do PDV são faturamento bruto.
-   * O saldo bancário do Mercado Pago só deve receber a LIBERAÇÃO LÍQUIDA
-   * que realmente apareceu no extrato.
-   *
-   * Assim evitamos:
-   * venda bruta - taxa + liberação líquida = duplicidade.
-   */
-  if (isGrossMercadoPagoCardSale(text)) {
-    return json({
-      ok: false,
-      error: 'Venda bruta de cartão não deve movimentar a conta Mercado Pago.',
-      reply:
-        'Não registrei este valor no banco.\n\n' +
-        'Crédito/débito do PDV é faturamento bruto. ' +
-        'No Mercado Pago registre somente o valor líquido quando ele for liberado no extrato.\n\n' +
-        'Exemplo: entrou 180,38 liberacao mercado pago'
-    }, 400);
-  }
-
-  /*
-   * Linguagem natural:
-   * "paguei 38 acordo pix nubank" => acordo societário.
-   * Mantém frases já específicas sem alteração.
-   */
-  text = normalizeAgreementAlias(text);
-
-  /*
-   * Data retroativa para ENTRADA/SAÍDA após a implantação.
-   *
-   * O worker base aceita o prefixo, mas hoje bloqueia datas posteriores
-   * ao período histórico quando não são a data atual.
-   *
-   * Estratégia segura:
-   * 1) processa o comando normalmente sem o prefixo;
-   * 2) captura o ID criado;
-   * 3) muda apenas occurred_at/period_key para a data informada;
-   * 4) registra revision de auditoria.
-   *
-   * Compras no cartão continuam com o fluxo próprio da v1.8.2, que já
-   * aceita data da compra e não movimenta o saldo bancário.
-   */
-  const dateInfo = extractDatePrefix(text);
-
-  if (dateInfo && isOrdinaryIncomeExpense(dateInfo.rest) && !isMercadoPagoCardPurchase(dateInfo.rest)) {
-    const today = localDate();
-    const historicalEnd = '2026-08-10';
-
-    if (dateInfo.iso > today) {
-      return json({
-        ok: false,
-        error: 'A data não pode estar no futuro.',
-        reply: 'Não registrei: a data informada está no futuro.'
-      }, 400);
-    }
-
-    if (dateInfo.iso > historicalEnd && dateInfo.iso !== today) {
-      const forwarded = makeJsonRequest(request, {
-        ...body,
-        text: dateInfo.rest
-      });
-
-      const res = await worker193.fetch(forwarded, env, ctx);
-
-      if (!res.ok) return res;
-
-      const data = await res.clone().json().catch(() => null);
-      const id = transactionIdFromReply(data?.reply);
-
-      if (!id) {
-        return res;
-      }
-
-      const current = await env.DB.prepare(
-        "SELECT * FROM transactions WHERE id=? AND status!='void' LIMIT 1"
-      ).bind(id).first();
-
-      if (!current) return res;
-
-      const occurredAt = `${dateInfo.iso}T16:00:00.000Z`;
-      const periodKey = dateInfo.iso.slice(0, 7);
-
-      await env.DB.prepare(
-        "UPDATE transactions SET occurred_at=?,period_key=?,updated_at=CURRENT_TIMESTAMP WHERE id=?"
-      ).bind(occurredAt, periodKey, id).run();
-
-      const after = await env.DB.prepare(
-        "SELECT * FROM transactions WHERE id=? LIMIT 1"
-      ).bind(id).first();
-
-      await env.DB.prepare(`
-        INSERT INTO transaction_revisions(
-          transaction_id,action,before_json,after_json
-        ) VALUES(?,?,?,?)
-      `).bind(
-        id,
-        'edit',
-        JSON.stringify(current),
-        JSON.stringify(after)
-      ).run().catch(() => {});
-
-      if (data?.reply) {
-        data.reply = replaceOrAppendDate(data.reply, dateInfo.iso);
-        data.reply += '\nData retroativa aplicada pela v1.9.4.';
-        return json(data, res.status);
-      }
-
-      return res;
-    }
-  }
-
-  const forwarded = makeJsonRequest(request, {
-    ...body,
-    text
-  });
-
-  const res = await worker193.fetch(forwarded, env, ctx);
-
-  if (new URL(request.url).pathname === '/api/health' && res.ok) {
-    const data = await res.clone().json().catch(() => ({}));
-    return json({ ...data, version: VERSION }, res.status);
-  }
-
-  return res;
-}
-
-function isGrossMercadoPagoCardSale(text) {
-  const n = norm(stripDatePrefix(text));
-
-  if (!/^(entrou|recebi|vendi|venda|vendas)\b/.test(n)) return false;
-  if (!/\bmercado pago\b/.test(n)) return false;
-  if (/\bliberacao\b|\bliberado\b|\bliquido\b/.test(n)) return false;
-
-  return /\bcredito\b|\bdebito\b/.test(n);
-}
-
-function isMercadoPagoCardPurchase(text) {
-  const n = norm(stripDatePrefix(text));
-
-  if (!/^(compra|comprei|gasto|gastei)\b/.test(n)) return false;
-  if (!/\bmercado pago\b/.test(n)) return false;
-
-  return /\bcredito\b|\bcartao\b/.test(n) &&
-    /\bpessoal\b|\bempresa\b|\bempresarial\b|\bloja\b|\bestoque\b|\bmercadoria\b|\bmarketing\b/.test(n);
-}
-
-function isOrdinaryIncomeExpense(text) {
-  const n = norm(text);
-  return /^(entrou|recebi|vendi|venda|gasto|gastei|paguei|saida|saiu)\b/.test(n);
-}
-
-function normalizeAgreementAlias(text) {
-  const info = extractDatePrefix(text);
-  const prefix = info ? text.slice(0, text.length - info.rest.length) : '';
-  let rest = info ? info.rest : text;
-  const n = norm(rest);
-
-  if (!/^(gasto|gastei|paguei|saida|saiu)\b/.test(n)) {
-    return text;
-  }
-
-  if (
-    /\bacordo societario\b/.test(n) ||
-    /\baquisicao societaria\b/.test(n) ||
-    /\bacordo empresa\b/.test(n)
-  ) {
-    return text;
-  }
-
-  if (/\bacordo\b/.test(n)) {
-    rest = rest.replace(/\bacordo\b/i, 'acordo societario');
-    return `${prefix}${rest}`.trim();
-  }
-
-  return text;
-}
-
-function extractDatePrefix(text) {
-  const raw = String(text || '').trim();
-  const m = raw.match(/^(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\s+/);
-
-  if (!m) return null;
-
-  const day = Number(m[1]);
-  const month = Number(m[2]);
-  let year = m[3] ? Number(m[3]) : Number(localDate().slice(0, 4));
-
-  if (year < 100) year += 2000;
-
-  const iso =
-    `${String(year).padStart(4, '0')}-` +
-    `${String(month).padStart(2, '0')}-` +
-    `${String(day).padStart(2, '0')}`;
-
-  if (!validIsoDate(iso)) return null;
-
-  return {
-    iso,
-    rest: raw.slice(m[0].length).trim()
-  };
-}
-
-function stripDatePrefix(text) {
-  return extractDatePrefix(text)?.rest || String(text || '').trim();
-}
-
-function validIsoDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-
-  const [y, m, d] = value.split('-').map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-
-  return (
-    date.getUTCFullYear() === y &&
-    date.getUTCMonth() === m - 1 &&
-    date.getUTCDate() === d
-  );
-}
-
-function transactionIdFromReply(reply) {
-  const m = String(reply || '').match(/\bID\s*#(\d+)\b/i);
-  return m ? Number(m[1]) : null;
-}
-
-function replaceOrAppendDate(reply, iso) {
-  const br = iso.split('-').reverse().join('/');
-  const s = String(reply || '');
-
-  if (/^Data:\s*.+$/mi.test(s)) {
-    return s.replace(/^Data:\s*.+$/mi, `Data: ${br}`);
-  }
-
-  const idMatch = s.match(/\nID\s*#\d+/i);
-
-  if (idMatch) {
-    return s.replace(idMatch[0], `\nData: ${br}${idMatch[0]}`);
-  }
-
-  return `${s}\nData: ${br}`;
-}
-
-function makeJsonRequest(request, body) {
   const headers = new Headers(request.headers);
   headers.set('content-type', 'application/json; charset=utf-8');
   headers.delete('content-length');
@@ -319,20 +83,201 @@ function makeJsonRequest(request, body) {
   return new Request(request.url, {
     method: request.method,
     headers,
-    body: JSON.stringify(body)
+    body: JSON.stringify({
+      ...body,
+      text: normalizedText
+    })
   });
 }
 
-function localDate() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(new Date());
+function normalizeFinanceCommandText(value) {
+  const raw = String(value || '').trim();
+
+  if (!raw) {
+    return raw;
+  }
+
+  /*
+   * Preserva o prefixo de data já reconhecido pelo parser-base.
+   * Nesta v1.9.4 não alteramos a regra histórica do banco:
+   * foco é estabilidade após o rollback.
+   */
+  const dateMatch = raw.match(
+    /^\s*\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\s+/
+  );
+
+  const prefix = dateMatch ? dateMatch[0] : '';
+  const rest = dateMatch ? raw.slice(prefix.length) : raw;
+
+  const verbMatch = rest.match(
+    /^(gasto|gastei|paguei|saida|saiu|entrou|recebi|vendi|venda|compra|comprei|transfere|transferir|transferencia|transferência)\b\s*/i
+  );
+
+  if (!verbMatch) {
+    return raw;
+  }
+
+  const afterVerb = rest.slice(verbMatch[0].length);
+
+  const moneyMatch = afterVerb.match(
+    /^(?:R\$\s*)?(\d+(?:[.,]\d+)*)\b/i
+  );
+
+  let rebuilt = rest;
+
+  /*
+   * Mantém a correção de valores que já estava validada na v1.9.3:
+   * 3500       -> 3500,00
+   * 3.500      -> 3500,00
+   * 3500,50    -> 3500,50
+   * 3.500,50   -> 3500,50
+   */
+  if (moneyMatch) {
+    const cents = parsePtMoneyToCentsV194(moneyMatch[1]);
+
+    if (cents > 0) {
+      const canonical = formatCanonicalMoney(cents);
+
+      rebuilt =
+        verbMatch[0] +
+        afterVerb.replace(moneyMatch[0], canonical);
+    }
+  }
+
+  let normalized = normalizeText(rebuilt);
+
+  const expenseOrPurchase =
+    /^(gasto|gastei|paguei|saida|saiu|compra|comprei)\b/.test(normalized);
+
+  /*
+   * GRAVO
+   * Mantém o comportamento já usado na v1.9.3.
+   */
+  if (
+    expenseOrPurchase &&
+    /\bgravo\b/.test(normalized) &&
+    !/\bcategoria\b/.test(normalized)
+  ) {
+    rebuilt =
+      `${rebuilt.trim()} categoria ${SYSTEMS_CATEGORY}`;
+
+    normalized = normalizeText(rebuilt);
+  }
+
+  /*
+   * ACORDO
+   * Facilita o comando curto que foi validado pelo usuário.
+   *
+   * Ex.:
+   * paguei 38 acordo pix nubank
+   *
+   * vira:
+   * paguei 38 acordo societario pix nubank
+   *
+   * Não mexe se o usuário já escreveu um acordo específico.
+   */
+  if (
+    /^(gasto|gastei|paguei|saida|saiu)\b/.test(normalized) &&
+    /\bacordo\b/.test(normalized) &&
+    !/\bacordo societario\b/.test(normalized) &&
+    !/\baquisicao societaria\b/.test(normalized) &&
+    !/\bacordo empresa\b/.test(normalized)
+  ) {
+    rebuilt = rebuilt.replace(
+      /\bacordo\b/i,
+      'acordo societario'
+    );
+  }
+
+  return `${prefix}${rebuilt}`.trim();
 }
 
-function norm(value) {
+function parsePtMoneyToCentsV194(value) {
+  let s = String(value || '')
+    .trim()
+    .replace(/R\$/gi, '')
+    .replace(/\s+/g, '');
+
+  if (!/^\d+(?:[.,]\d+)*$/.test(s)) {
+    return 0;
+  }
+
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+  let normalized = s;
+
+  if (hasComma && hasDot) {
+    const decimalSep =
+      s.lastIndexOf(',') > s.lastIndexOf('.')
+        ? ','
+        : '.';
+
+    const thousandSep =
+      decimalSep === ','
+        ? '.'
+        : ',';
+
+    const parts = s.split(decimalSep);
+
+    if (
+      parts.length !== 2 ||
+      parts[1].length > 2
+    ) {
+      return 0;
+    }
+
+    normalized =
+      parts[0].split(thousandSep).join('') +
+      (parts[1]
+        ? `.${parts[1]}`
+        : '');
+  } else if (hasComma || hasDot) {
+    const sep = hasComma ? ',' : '.';
+    const parts = s.split(sep);
+
+    if (parts.length === 2) {
+      const [left, right] = parts;
+
+      if (
+        right.length === 3 &&
+        left.length <= 3
+      ) {
+        normalized = left + right;
+      } else if (right.length <= 2) {
+        normalized = `${left}.${right}`;
+      } else {
+        return 0;
+      }
+    } else {
+      if (
+        parts
+          .slice(1)
+          .every(part => part.length === 3)
+      ) {
+        normalized = parts.join('');
+      } else {
+        return 0;
+      }
+    }
+  }
+
+  const n = Number(normalized);
+
+  return Number.isFinite(n) && n > 0
+    ? Math.round(n * 100)
+    : 0;
+}
+
+function formatCanonicalMoney(cents) {
+  const n = Math.trunc(Number(cents));
+  const whole = Math.floor(n / 100);
+  const decimals =
+    String(n % 100).padStart(2, '0');
+
+  return `${whole},${decimals}`;
+}
+
+function normalizeText(value) {
   return String(value || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -342,11 +287,16 @@ function norm(value) {
 }
 
 function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store'
+  return new Response(
+    JSON.stringify(data),
+    {
+      status,
+      headers: {
+        'content-type':
+          'application/json; charset=utf-8',
+        'cache-control':
+          'no-store'
+      }
     }
-  });
+  );
 }
