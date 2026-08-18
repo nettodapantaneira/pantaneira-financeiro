@@ -1,33 +1,89 @@
-PANTANEIRA FINANCEIRO — v1.9.4 SEGURA
+PANTANEIRA FINANCEIRO — v1.9.5 PRO
 
-IMPORTANTE
-Esta versão foi refeita a partir do mesmo desenho estável da v1.9.3.
-Ela NÃO importa worker-v193.js por cima do wrapper anterior.
-
-Isso evita repetir o erro:
-Cannot read properties of undefined (reading 'fetch')
+BASE TÉCNICA
+- A v1.9.5 parte diretamente da v1.9.2 estável.
+- Não empilha worker-v193/worker-v194.
+- Nenhuma migration D1.
+- Nenhum reparo automático de saldo é executado no deploy.
 
 ARQUIVOS
 - /wrangler.jsonc
-- /src/worker-v194.js
-- /public/v194.js
+- /src/worker-v195.js
+- /public/v195.js
 
-O QUE ENTRA
-1. Versão oficial 1.9.4.
-2. Mantém o parser de valores validado na v1.9.3.
-3. Mantém Gravo -> Sistemas e aplicativos.
-4. Melhora acordo curto:
-   paguei 38 acordo pix nubank
-   -> acordo societário.
-5. Nenhuma migration D1.
-6. Nenhuma alteração automática de saldo ou histórico antigo.
-7. Não mexe ainda na regra de datas retroativas após 10/08.
-   Essa mudança fica para a próxima etapa, depois de validar estabilidade.
-8. Não mexe ainda automaticamente nos lançamentos antigos do Mercado Pago.
+PRINCIPAIS CORREÇÕES
 
-TESTE APÓS DEPLOY
-1. /api/health deve mostrar version 1.9.4.
-2. Abra a página principal.
-3. Só depois teste:
-   saldo
-4. Não faça lançamento financeiro de teste até validar a página e health.
+1) PESQUISA PROFISSIONAL EM MOVIMENTOS
+- Novo campo direto na tela Movimentos.
+- Busca por #ID, descrição, valor, conta ou categoria.
+- A página "Pesquisar lançamentos" ganha botão Editar em cada resultado.
+- Digitar #96 abre diretamente o lançamento #96.
+- Não precisa mais procurar lançamento um por um manualmente.
+
+2) EDITOR INDIVIDUAL PROFISSIONAL
+- Edita data, valor, tipo, descrição, natureza, categoria, dívida, conta e forma.
+- Cancela lançamento com auditoria.
+- Funciona também em resultados antigos localizados pela pesquisa.
+
+3) CARTÃO MERCADO PAGO ≠ CONTA MERCADO PAGO
+- Detecta saída bancária marcada como Crédito na conta Mercado Pago.
+- Exibe alerta explícito de inconsistência.
+- Botões:
+  "Mover para fatura · Empresa"
+  "Mover para fatura · Pessoal"
+- A conversão:
+  a) cria a compra na fatura correta do Cartão Mercado Pago;
+  b) cancela a saída bancária original;
+  c) mantém auditoria.
+- Se o cancelamento do original falhar, tenta reverter automaticamente a compra criada para evitar duplicidade.
+
+4) PREVENÇÃO NO WHATSAPP
+Comando ambíguo:
+  gasto 52,87 mercado credito mercado pago
+é BLOQUEADO e pede "Pessoal" ou "Empresa".
+
+Correto:
+  gasto 52,87 mercado credito mercado pago pessoal
+ou
+  gasto 49,90 gravo credito mercado pago empresa
+
+5) GRAVO
+- Continua reconhecendo Gravo como:
+  Sistemas e aplicativos.
+
+6) ACORDO CURTO
+- Passa a aceitar:
+  paguei 38 acordo pix nubank
+como acordo societário.
+
+7) DATA RETROATIVA PELO WHATSAPP
+- Passa a aceitar lançamentos comuns depois de 10/08, por exemplo:
+  15/08 gasto 38 marmita pix nubank
+  15/08 entrou 40 venda pix nubank
+- A data é corrigida após a criação e fica registrada em transaction_revisions.
+
+8) MERCADO PAGO — VENDA BRUTA
+Bloqueia:
+  venda 182 debito mercado pago
+  venda 149 credito mercado pago
+
+Porque venda bruta não é saldo bancário.
+
+No saldo bancário registre somente a liberação líquida real:
+  entrou 180,38 liberacao mercado pago
+
+9) VALORES
+Mantém normalização:
+- 3500 -> 3500,00
+- 3.500 -> 3500,00
+- 3500,50 -> 3500,50
+- 3.500,50 -> 3500,50
+
+VALIDAÇÃO APÓS DEPLOY
+1. /api/health -> version 1.9.5
+2. Abrir a página principal.
+3. Ir em Movimentos.
+4. Pesquisar #88 ou outro ID.
+5. Abrir um lançamento Crédito + Mercado Pago:
+   deve aparecer o alerta de inconsistência e os botões para mover à fatura.
+6. Não faça conversão até confirmar visualmente a tela com o alerta.
