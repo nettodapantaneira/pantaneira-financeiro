@@ -1,89 +1,31 @@
-PANTANEIRA FINANCEIRO — v1.9.5 PRO
+PANTANEIRA FINANCEIRO — HOTFIX v1.9.7
 
-BASE TÉCNICA
-- A v1.9.5 parte diretamente da v1.9.2 estável.
-- Não empilha worker-v193/worker-v194.
-- Nenhuma migration D1.
-- Nenhum reparo automático de saldo é executado no deploy.
+OBJETIVO
+- Remover a cadeia worker-v197 -> worker-v196 que causou Error 1102 / resource limits.
+- Separar definitivamente VENDA NO CRÉDITO de COMPRA NO CARTÃO.
+- Preservar a base estável worker-v194 e o D1 atual.
 
-ARQUIVOS
-- /wrangler.jsonc
-- /src/worker-v195.js
-- /public/v195.js
+ARQUIVOS PARA SUBIR
+- src/worker-v197.js
+- wrangler.jsonc
 
-PRINCIPAIS CORREÇÕES
+NÃO ALTERAR
+- D1
+- migrations
+- public/v194.js
+- worker-v194.js
 
-1) PESQUISA PROFISSIONAL EM MOVIMENTOS
-- Novo campo direto na tela Movimentos.
-- Busca por #ID, descrição, valor, conta ou categoria.
-- A página "Pesquisar lançamentos" ganha botão Editar em cada resultado.
-- Digitar #96 abre diretamente o lançamento #96.
-- Não precisa mais procurar lançamento um por um manualmente.
+TESTES APÓS O DEPLOY
+1) O site deve abrir sem Error 1102.
+2) WhatsApp: entrou venda 35 cartao credito mercado pago
+   Esperado: entrada/venda. Nunca "Compra no cartão".
+3) WhatsApp: entrou venda 80 dinheiro
+   Esperado: entrada em dinheiro.
+4) WhatsApp: 19/08 saiu 31 marmita mercado pago credito
+   Esperado: compra na fatura do Cartão Mercado Pago, sem baixar saldo bancário.
 
-2) EDITOR INDIVIDUAL PROFISSIONAL
-- Edita data, valor, tipo, descrição, natureza, categoria, dívida, conta e forma.
-- Cancela lançamento com auditoria.
-- Funciona também em resultados antigos localizados pela pesquisa.
-
-3) CARTÃO MERCADO PAGO ≠ CONTA MERCADO PAGO
-- Detecta saída bancária marcada como Crédito na conta Mercado Pago.
-- Exibe alerta explícito de inconsistência.
-- Botões:
-  "Mover para fatura · Empresa"
-  "Mover para fatura · Pessoal"
-- A conversão:
-  a) cria a compra na fatura correta do Cartão Mercado Pago;
-  b) cancela a saída bancária original;
-  c) mantém auditoria.
-- Se o cancelamento do original falhar, tenta reverter automaticamente a compra criada para evitar duplicidade.
-
-4) PREVENÇÃO NO WHATSAPP
-Comando ambíguo:
-  gasto 52,87 mercado credito mercado pago
-é BLOQUEADO e pede "Pessoal" ou "Empresa".
-
-Correto:
-  gasto 52,87 mercado credito mercado pago pessoal
-ou
-  gasto 49,90 gravo credito mercado pago empresa
-
-5) GRAVO
-- Continua reconhecendo Gravo como:
-  Sistemas e aplicativos.
-
-6) ACORDO CURTO
-- Passa a aceitar:
-  paguei 38 acordo pix nubank
-como acordo societário.
-
-7) DATA RETROATIVA PELO WHATSAPP
-- Passa a aceitar lançamentos comuns depois de 10/08, por exemplo:
-  15/08 gasto 38 marmita pix nubank
-  15/08 entrou 40 venda pix nubank
-- A data é corrigida após a criação e fica registrada em transaction_revisions.
-
-8) MERCADO PAGO — VENDA BRUTA
-Bloqueia:
-  venda 182 debito mercado pago
-  venda 149 credito mercado pago
-
-Porque venda bruta não é saldo bancário.
-
-No saldo bancário registre somente a liberação líquida real:
-  entrou 180,38 liberacao mercado pago
-
-9) VALORES
-Mantém normalização:
-- 3500 -> 3500,00
-- 3.500 -> 3500,00
-- 3500,50 -> 3500,50
-- 3.500,50 -> 3500,50
-
-VALIDAÇÃO APÓS DEPLOY
-1. /api/health -> version 1.9.5
-2. Abrir a página principal.
-3. Ir em Movimentos.
-4. Pesquisar #88 ou outro ID.
-5. Abrir um lançamento Crédito + Mercado Pago:
-   deve aparecer o alerta de inconsistência e os botões para mover à fatura.
-6. Não faça conversão até confirmar visualmente a tela com o alerta.
+REGRAS
+- entrou/recebi/vendi/venda + crédito = VENDA/ENTRADA.
+- gasto/gastei/paguei/saiu/compra + crédito Mercado Pago = COMPRA NO CARTÃO.
+- gasto/saiu + Pix/débito = SAÍDA BANCÁRIA.
+- pagamento de fatura não vira nova compra.
