@@ -1,0 +1,1334 @@
+import worker196 from './worker-v196.js';
+import worker194 from './worker-v194.js';
+import worker182 from './worker-v182.js';
+
+const VERSION = '1.9.7';
+const TZ = 'America/Cuiaba';
+const FIX_TAG = 'V197_CARD_FIX';
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    try {
+      if (url.pathname === '/api/internal/finance-command' && request.method === 'POST') {
+        return routeFinanceCommand(request, env, ctx);
+      }
+
+      const response = await worker196.fetch(request, env, ctx);
+      const type = response.headers.get('content-type') || '';
+
+      if (url.pathname === '/api/health' && response.ok) {
+        const data = await response.clone().json().catch(() => ({}));
+        return json({ ...data, version: VERSION }, response.status);
+      }
+
+      if (url.pathname === '/v194.js' && response.ok && type.includes('javascript')) {
+        let js = await response.text();
+        js = js.replace(
+          /const\s+VERSION\s*=\s*['"]1\.9\.(?:4|6)['"]\s*;/g,
+          `const VERSION = '${VERSION}';`
+        );
+        return new Response(js, {
+          status: response.status,
+          headers: freshHeaders(response.headers)
+        });
+      }
+
+      if (response.ok && type.includes('text/html')) {
+        let html = await response.text();
+        html = html.replace(/1\.9\.6/g, VERSION);
+        return new Response(html, {
+          status: response.status,
+          headers: freshHeaders(response.headers)
+        });
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Pantaneira Financeiro v1.9.7', error);
+
+      if (url.pathname.startsWith('/api/')) {
+        return json(
+          { error: String(error?.message || error) },
+          400
+        );
+      }
+
+      return worker196.fetch(request, env, ctx);
+    }
+  }
+};
+
+async function routeFinanceCommand(request, env, ctx) {
+  const body = await request.clone().json().catch(() => null);
+
+  if (!body || typeof body.text !== 'string') {
+    return worker194.fetch(request, env, ctx);
+  }
+
+  const correction = parseCorrectionCommand(body.text);
+
+  if (correction) {
+    return handleLegacyCardCorrection(
+      body,
+      request,
+      env,
+      correction.transaction_id
+    );
+  }
+
+  const shell = parseCommandShell(body.text);
+
+  if (!shell) {
+    return worker194.fetch(request, env, ctx);
+  }
+
+  /*
+   * REGRA PRINCIPAL:
+   *
+   * ENTROU / RECEBI / VENDI / VENDA
+   * nunca pode virar compra no cartão.
+   */
+  if (
+    ['entrou', 'recebi', 'vendi', 'venda']
+      .includes(shell.verb)
+  ) {
+    return worker194.fetch(request, env, ctx);
+  }
+
+  const expenseVerbs = new Set([
+    'gasto',
+    'gastei',
+    'paguei',
+    'saida',
+    'saiu',
+    'compra',
+    'comprei'
+  ]);
+
+  if (!expenseVerbs.has(shell.verb)) {
+    return worker194.fetch(request, env, ctx);
+  }
+
+  const normalizedRest =
+    norm(shell.rest);
+
+  const isMercadoPago =
+    /\bmercado pago\b/
+      .test(normalizedRest);
+
+  const isCreditCard =
+    /\bcredito\b/
+      .test(normalizedRest) ||
+    /\bcartao(?: de credito)?\b/
+      .test(normalizedRest);
+
+  const isBillPayment =
+    /\bfatura\b/
+      .test(normalizedRest);
+
+  /*
+   * Gasto normal:
+   * Pix, dinheiro, débito etc.
+   * Vai para o Financeiro normal.
+   */
+  if (
+    !isMercadoPago ||
+    !isCreditCard
+  ) {
+    return worker194.fetch(request, env, ctx);
+  }
+
+  /*
+   * Pagamento da fatura não é
+   * uma nova compra.
+   */
+  if (isBillPayment) {
+    return json(
+      {
+        ok: false,
+
+        reply:
+          'Pagamento de fatura identificado. Registre em Compromissos → Cartões e faturas para não duplicar a despesa.',
+
+        error:
+          'Pagamento de fatura deve ser vinculado à fatura.'
+      },
+      400
+    );
+  }
+
+  /*
+   * Compra no cartão.
+   */
+  const rewritten =
+    rewriteCardPurchase(shell);
+
+  if (!rewritten.ok) {
+    return json(
+      {
+        ok: false,
+        reply: rewritten.error,
+        error: rewritten.error
+      },
+      400
+    );
+  }
+
+  const headers =
+    new Headers(request.headers);
+
+  headers.set(
+    'content-type',
+    'application/json; charset=utf-8'
+  );
+
+  headers.delete(
+    'content-length'
+  );
+
+  const forwarded =
+    new Request(
+      request.url,
+      {
+        method: 'POST',
+        headers,
+
+        body:
+          JSON.stringify({
+            ...body,
+            text: rewritten.text
+          })
+      }
+    );
+
+  /*
+   * IMPORTANTE:
+   *
+   * Vai DIRETO para o módulo de
+   * cartão já funcional da v1.8.2.
+   *
+   * Não volta para v1.9.6.
+   * Isso elimina a recursão.
+   */
+  return worker182.fetch(
+    forwarded,
+    env,
+    ctx
+  );
+}
+
+function parseCommandShell(input) {
+  let raw =
+    String(input || '')
+      .trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  let datePrefix = '';
+
+  const dateMatch =
+    raw.match(
+      /^(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\s+/
+    );
+
+  if (dateMatch) {
+    const day =
+      Number(dateMatch[1]);
+
+    const month =
+      Number(dateMatch[2]);
+
+    let year =
+      dateMatch[3]
+        ? Number(dateMatch[3])
+        : Number(
+            localDate()
+              .slice(0, 4)
+          );
+
+    if (year < 100) {
+      year += 2000;
+    }
+
+    if (
+      !safeDate(
+        year,
+        month,
+        day
+      )
+    ) {
+      return null;
+    }
+
+    datePrefix =
+      dateMatch[0]
+        .trim();
+
+    raw =
+      raw
+        .slice(
+          dateMatch[0].length
+        )
+        .trim();
+  }
+
+  const verbMatch =
+    raw.match(
+      /^(gasto|gastei|paguei|saida|saída|saiu|entrou|recebi|vendi|venda|compra|comprei)\b\s*/i
+    );
+
+  if (!verbMatch) {
+    return null;
+  }
+
+  return {
+    verb:
+      norm(
+        verbMatch[1]
+      ),
+
+    date_prefix:
+      datePrefix,
+
+    rest:
+      raw
+        .slice(
+          verbMatch[0].length
+        )
+        .trim()
+  };
+}
+
+function rewriteCardPurchase(shell) {
+  const amountMatch =
+    shell.rest.match(
+      /^(?:R\$\s*)?((?:\d{1,3}(?:\.\d{3})+|\d+)(?:[,.]\d{1,2})?)\s+/
+    );
+
+  if (!amountMatch) {
+    return {
+      ok: false,
+
+      error:
+        'Não encontrei o valor. Ex.: gasto 65 pneu loja credito mercado pago empresa.'
+    };
+  }
+
+  const amount =
+    amountMatch[1];
+
+  let rest =
+    shell.rest
+      .slice(
+        amountMatch[0].length
+      )
+      .trim();
+
+  const scopeText =
+    norm(
+      rest.replace(
+        /mercado\s*pago/ig,
+        ' '
+      )
+    );
+
+  let scope = null;
+
+  /*
+   * Uso explicitamente informado.
+   */
+  if (
+    /\b(?:uso )?pessoal\b/
+      .test(scopeText)
+  ) {
+    scope =
+      'pessoal';
+  }
+
+  if (
+    /\bempresa\b|\bempresarial\b/
+      .test(scopeText)
+  ) {
+    scope =
+      'empresa';
+  }
+
+  /*
+   * Inferências seguras.
+   */
+  if (
+    !scope &&
+    /\b(marmita|ifood|lanche|refeicao|comida|mercado|supermercado|casa)\b/
+      .test(scopeText)
+  ) {
+    scope =
+      'pessoal';
+  }
+
+  if (
+    !scope &&
+    /\b(loja|estoque|mercadoria|fornecedor|insumo|marketing|facebook|instagram|meta|pneu|moto|manutencao|reparo)\b/
+      .test(scopeText)
+  ) {
+    scope =
+      'empresa';
+  }
+
+  /*
+   * Se houver dúvida, NÃO lança.
+   * Melhor perguntar do que mexer
+   * no banco errado.
+   */
+  if (!scope) {
+    return {
+      ok: false,
+
+      error:
+        'Compra no cartão identificada. Informe PESSOAL ou EMPRESA para não mexer na conta bancária por engano.'
+    };
+  }
+
+  /*
+   * Categoria informada no comando.
+   */
+  let category = null;
+
+  const categoryMatch =
+    rest.match(
+      /\s+categoria\s+(.+)$/i
+    );
+
+  if (categoryMatch) {
+    category =
+      categoryMatch[1]
+        .trim();
+
+    rest =
+      rest
+        .slice(
+          0,
+          categoryMatch.index
+        )
+        .trim();
+  }
+
+  /*
+   * Categorias automáticas.
+   */
+  if (!category) {
+    if (
+      /\bmarmita\b/
+        .test(scopeText)
+    ) {
+      category =
+        'Marmita';
+    }
+
+    else if (
+      /\b(mercado|supermercado)\b/
+        .test(scopeText) &&
+      scope === 'pessoal'
+    ) {
+      category =
+        'Mercado pessoal';
+    }
+
+    else if (
+      /\b(facebook|instagram|meta|marketing|anuncio|trafego)\b/
+        .test(scopeText)
+    ) {
+      category =
+        'Marketing e publicidade';
+    }
+
+    else if (
+      /\b(pneu|moto|manutencao|reparo|conserto)\b/
+        .test(scopeText) &&
+      scope === 'empresa'
+    ) {
+      category =
+        'Manutenção e reparos';
+    }
+  }
+
+  /*
+   * Limpa "credito mercado pago"
+   * antes de reconstruir o comando.
+   */
+  rest =
+    rest
+      .replace(
+        /\s+(?:no\s+)?(?:credito|crédito|cartao|cartão)(?:\s+de\s+(?:credito|crédito))?\s+(?:do\s+)?mercado\s*pago\b/ig,
+        ' '
+      )
+      .replace(
+        /\s+mercado\s*pago\s+(?:credito|crédito|cartao|cartão)(?:\s+de\s+(?:credito|crédito))?\b/ig,
+        ' '
+      )
+      .replace(
+        /\b(?:uso\s+)?pessoal\b/ig,
+        ' '
+      )
+      .replace(
+        /\b(?:empresa|empresarial)\b/ig,
+        ' '
+      )
+      .replace(
+        /\s+/g,
+        ' '
+      )
+      .trim();
+
+  const date =
+    shell.date_prefix
+      ? `${shell.date_prefix} `
+      : '';
+
+  let text =
+    `${date}gasto ${amount} ${rest} credito mercado pago ${scope}`
+      .replace(
+        /\s+/g,
+        ' '
+      )
+      .trim();
+
+  if (category) {
+    text +=
+      ` categoria ${category}`;
+  }
+
+  return {
+    ok: true,
+    text
+  };
+}
+
+/*
+ * COMANDO DE CORREÇÃO:
+ *
+ * financeiro corrigir cartao 120
+ */
+function parseCorrectionCommand(input) {
+  const n =
+    norm(input);
+
+  const match =
+    n.match(
+      /^(?:corrigir|corrige|corrija)\s+cartao\s+#?(\d+)$/
+    );
+
+  return match
+    ? {
+        transaction_id:
+          Number(match[1])
+      }
+    : null;
+}
+
+async function handleLegacyCardCorrection(
+  body,
+  request,
+  env,
+  transactionId
+) {
+  const auth =
+    validateFinanceAuth(
+      body,
+      request,
+      env
+    );
+
+  if (auth) {
+    return auth;
+  }
+
+  const db =
+    env.DB;
+
+  const tx =
+    await db.prepare(`
+      SELECT
+        t.*,
+        a.name source_account_name,
+        c.name category_name
+
+      FROM transactions t
+
+      LEFT JOIN accounts a
+        ON a.id=t.source_account_id
+
+      LEFT JOIN categories c
+        ON c.id=t.category_id
+
+      WHERE t.id=?
+
+      LIMIT 1
+    `)
+      .bind(
+        transactionId
+      )
+      .first();
+
+  if (!tx) {
+    return json(
+      {
+        error:
+          `Lançamento #${transactionId} não encontrado.`
+      },
+      404
+    );
+  }
+
+  const marker =
+    `[${FIX_TAG}:${transactionId}]`;
+
+  /*
+   * Verifica se já houve conversão.
+   */
+  const existingItem =
+    await db.prepare(`
+      SELECT
+        id,
+        bill_id
+
+      FROM credit_card_items
+
+      WHERE
+        status='posted'
+        AND notes LIKE ?
+
+      LIMIT 1
+    `)
+      .bind(
+        `%${marker}%`
+      )
+      .first();
+
+  if (
+    tx.status ===
+    'void'
+  ) {
+    return json({
+      ok: true,
+
+      reply:
+        existingItem
+          ? `O #${transactionId} já foi corrigido e está na fatura do Cartão Mercado Pago.`
+          : `O #${transactionId} já está cancelado.`
+    });
+  }
+
+  /*
+   * Segurança:
+   * somente saída que entrou
+   * erroneamente como crédito MP.
+   */
+  if (
+    tx.direction !==
+      'expense' ||
+
+    tx.payment_method !==
+      'credit' ||
+
+    !norm(
+      tx.source_account_name
+    ).includes(
+      'mercado pago'
+    )
+  ) {
+    return json(
+      {
+        error:
+          `O #${transactionId} não é uma saída no crédito da conta Mercado Pago.`
+      },
+      400
+    );
+  }
+
+  const scope =
+    inferLegacyScope(tx);
+
+  if (!scope) {
+    return json(
+      {
+        error:
+          `Não consegui definir se o #${transactionId} é pessoal ou empresa.`
+      },
+      400
+    );
+  }
+
+  const date =
+    String(
+      tx.occurred_at ||
+      ''
+    )
+      .slice(
+        0,
+        10
+      );
+
+  const [
+    year,
+    month,
+    day
+  ] =
+    date.split('-');
+
+  let synthetic =
+    `${day}/${month}/${year} ` +
+    `gasto ${formatCommandMoney(tx.amount_cents)} ` +
+    `${String(tx.description || 'Compra no cartão').trim()} ` +
+    `credito mercado pago ${scope}`;
+
+  const expectedNature =
+    scope === 'pessoal'
+      ? 'personal_withdrawal'
+      : inferBusinessNature(
+          tx.description
+        );
+
+  /*
+   * Só reaproveita categoria antiga
+   * se a natureza realmente combina.
+   */
+  if (
+    tx.category_name &&
+    String(
+      tx.nature || ''
+    ) ===
+      expectedNature
+  ) {
+    synthetic +=
+      ` categoria ${tx.category_name}`;
+  }
+
+  /*
+   * Primeiro cria a compra
+   * correta na fatura.
+   */
+  if (!existingItem) {
+    const headers =
+      new Headers(
+        request.headers
+      );
+
+    headers.set(
+      'content-type',
+      'application/json; charset=utf-8'
+    );
+
+    headers.delete(
+      'content-length'
+    );
+
+    const cardRequest =
+      new Request(
+        request.url,
+        {
+          method:
+            'POST',
+
+          headers,
+
+          body:
+            JSON.stringify({
+              ...body,
+              text: synthetic
+            })
+        }
+      );
+
+    const cardResponse =
+      await worker182.fetch(
+        cardRequest,
+        env,
+        {}
+      );
+
+    const cardData =
+      await cardResponse
+        .clone()
+        .json()
+        .catch(
+          () => ({})
+        );
+
+    if (
+      !cardResponse.ok
+    ) {
+      return json(
+        {
+          error:
+            cardData.error ||
+            cardData.reply ||
+            `Não foi possível mover o #${transactionId} para a fatura.`
+        },
+        cardResponse.status
+      );
+    }
+
+    /*
+     * Marca o item para impedir
+     * correção duplicada.
+     */
+    if (
+      cardData.item_id
+    ) {
+      await db.prepare(`
+        UPDATE credit_card_items
+
+        SET
+          notes=
+            COALESCE(
+              notes,
+              ''
+            ) || ?,
+
+          updated_at=
+            CURRENT_TIMESTAMP
+
+        WHERE id=?
+      `)
+        .bind(
+          ` ${marker}`,
+          Number(
+            cardData.item_id
+          )
+        )
+        .run();
+    }
+  }
+
+  /*
+   * Depois cancela a saída
+   * bancária errada.
+   */
+  const before = {
+    ...tx
+  };
+
+  const nextNotes =
+    appendNote(
+      tx.notes,
+
+      `${marker} Convertido de saída bancária para compra na fatura.`
+    );
+
+  const statements = [
+    db.prepare(`
+      UPDATE transactions
+
+      SET
+        status='void',
+        notes=?,
+        updated_at=CURRENT_TIMESTAMP
+
+      WHERE id=?
+    `)
+      .bind(
+        nextNotes,
+        transactionId
+      ),
+
+    db.prepare(`
+      INSERT INTO transaction_revisions(
+        transaction_id,
+        action,
+        before_json,
+        after_json
+      )
+
+      VALUES(
+        ?,
+        ?,
+        ?,
+        ?
+      )
+    `)
+      .bind(
+        transactionId,
+        'void',
+        JSON.stringify(
+          before
+        ),
+        JSON.stringify({
+          ...before,
+          status: 'void',
+          notes: nextNotes
+        })
+      )
+  ];
+
+  /*
+   * Se o lançamento errado
+   * havia abatido dívida,
+   * devolve o valor.
+   */
+  if (
+    tx.debt_id
+  ) {
+    const debt =
+      await db.prepare(
+        `
+        SELECT
+          id,
+          original_balance_cents,
+          current_balance_cents
+
+        FROM debts
+
+        WHERE id=?
+        `
+      )
+        .bind(
+          Number(
+            tx.debt_id
+          )
+        )
+        .first();
+
+    if (
+      debt &&
+      debt.current_balance_cents !=
+        null
+    ) {
+      let restored =
+        Number(
+          debt.current_balance_cents ||
+          0
+        ) +
+        Number(
+          tx.amount_cents ||
+          0
+        );
+
+      if (
+        debt.original_balance_cents !=
+        null
+      ) {
+        restored =
+          Math.min(
+            restored,
+            Number(
+              debt.original_balance_cents
+            )
+          );
+      }
+
+      statements.push(
+        db.prepare(`
+          UPDATE debts
+
+          SET
+            current_balance_cents=?,
+            status='active',
+            updated_at=CURRENT_TIMESTAMP
+
+          WHERE id=?
+        `)
+          .bind(
+            restored,
+            Number(
+              debt.id
+            )
+          )
+      );
+    }
+  }
+
+  await db.batch(
+    statements
+  );
+
+  return json({
+    ok: true,
+
+    reply:
+      `Corrigido #${transactionId}: ` +
+      `${brl(tx.amount_cents)} foi removido da conta bancária e ficou na fatura do Cartão Mercado Pago.\n` +
+      'O saldo bancário não é mais reduzido por essa compra.'
+  });
+}
+
+function inferLegacyScope(tx) {
+  if (
+    tx.nature ===
+    'personal_withdrawal'
+  ) {
+    return 'pessoal';
+  }
+
+  if (
+    [
+      'business_operating',
+      'inventory'
+    ].includes(
+      String(
+        tx.nature ||
+        ''
+      )
+    )
+  ) {
+    return 'empresa';
+  }
+
+  const n =
+    norm(
+      `${tx.description || ''} ${tx.category_name || ''}`
+    );
+
+  if (
+    /\b(marmita|ifood|lanche|refeicao|comida|mercado|supermercado|pessoal|casa)\b/
+      .test(n)
+  ) {
+    return 'pessoal';
+  }
+
+  if (
+    /\b(loja|empresa|estoque|mercadoria|fornecedor|marketing|pneu|moto|manutencao|reparo)\b/
+      .test(n)
+  ) {
+    return 'empresa';
+  }
+
+  return null;
+}
+
+function inferBusinessNature(
+  description
+) {
+  const n =
+    norm(description);
+
+  return /\b(estoque|mercadoria|fornecedor|produto|insumo|materia prima)\b/
+    .test(n)
+      ? 'inventory'
+      : 'business_operating';
+}
+
+function validateFinanceAuth(
+  body,
+  request,
+  env
+) {
+  const secret =
+    String(
+      request.headers.get(
+        'x-finance-bot-secret'
+      ) ||
+      ''
+    );
+
+  if (
+    !secret ||
+    !env.FINANCE_BOT_SECRET ||
+    secret !==
+      String(
+        env.FINANCE_BOT_SECRET
+      )
+  ) {
+    return json(
+      {
+        error:
+          'Não autorizado.'
+      },
+      401
+    );
+  }
+
+  if (
+    !samePhone(
+      body.from,
+      env.WHATSAPP_ALLOWED_NUMBER
+    )
+  ) {
+    return json(
+      {
+        error:
+          'Número não autorizado.'
+      },
+      403
+    );
+  }
+
+  return null;
+}
+
+function formatCommandMoney(
+  cents
+) {
+  return (
+    Number(
+      cents ||
+      0
+    ) /
+    100
+  )
+    .toFixed(2)
+    .replace(
+      '.',
+      ','
+    );
+}
+
+function safeDate(
+  year,
+  month,
+  day
+) {
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1
+  ) {
+    return null;
+  }
+
+  const last =
+    new Date(
+      Date.UTC(
+        year,
+        month,
+        0
+      )
+    )
+      .getUTCDate();
+
+  if (
+    day > last
+  ) {
+    return null;
+  }
+
+  return (
+    `${year}-` +
+    `${String(month).padStart(2, '0')}-` +
+    `${String(day).padStart(2, '0')}`
+  );
+}
+
+function localDate() {
+  return new Intl.DateTimeFormat(
+    'en-CA',
+    {
+      timeZone:
+        TZ,
+
+      year:
+        'numeric',
+
+      month:
+        '2-digit',
+
+      day:
+        '2-digit'
+    }
+  )
+    .format(
+      new Date()
+    );
+}
+
+function norm(value) {
+  return String(
+    value ||
+    ''
+  )
+    .normalize('NFD')
+    .replace(
+      /[\u0300-\u036f]/g,
+      ''
+    )
+    .toLowerCase()
+    .replace(
+      /\s+/g,
+      ' '
+    )
+    .trim();
+}
+
+function digits(value) {
+  return String(
+    value ||
+    ''
+  )
+    .replace(
+      /\D/g,
+      ''
+    );
+}
+
+function samePhone(
+  a,
+  b
+) {
+  const aa =
+    digits(a);
+
+  const bb =
+    digits(b);
+
+  if (
+    !aa ||
+    !bb
+  ) {
+    return false;
+  }
+
+  if (
+    aa === bb
+  ) {
+    return true;
+  }
+
+  const variants =
+    value => {
+      const set =
+        new Set([
+          value
+        ]);
+
+      const national =
+        value.startsWith('55')
+          ? value.slice(2)
+          : value;
+
+      set.add(
+        national
+      );
+
+      if (
+        national.length === 11 &&
+        national[2] === '9'
+      ) {
+        set.add(
+          national.slice(0, 2) +
+          national.slice(3)
+        );
+      }
+
+      if (
+        national.length === 10
+      ) {
+        set.add(
+          national.slice(0, 2) +
+          '9' +
+          national.slice(2)
+        );
+      }
+
+      return set;
+    };
+
+  const A =
+    variants(aa);
+
+  const B =
+    variants(bb);
+
+  for (
+    const value of A
+  ) {
+    if (
+      B.has(value)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function appendNote(
+  current,
+  addition
+) {
+  return [
+    String(
+      current ||
+      ''
+    ).trim(),
+
+    String(
+      addition ||
+      ''
+    ).trim()
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function brl(cents) {
+  return new Intl.NumberFormat(
+    'pt-BR',
+    {
+      style:
+        'currency',
+
+      currency:
+        'BRL'
+    }
+  )
+    .format(
+      Number(
+        cents ||
+        0
+      ) /
+      100
+    );
+}
+
+function freshHeaders(
+  source
+) {
+  const headers =
+    new Headers(source);
+
+  headers.delete(
+    'content-length'
+  );
+
+  headers.set(
+    'cache-control',
+    'no-cache, no-store, must-revalidate'
+  );
+
+  headers.set(
+    'pragma',
+    'no-cache'
+  );
+
+  headers.set(
+    'expires',
+    '0'
+  );
+
+  return headers;
+}
+
+function json(
+  data,
+  status = 200
+) {
+  return new Response(
+    JSON.stringify(
+      data
+    ),
+    {
+      status,
+
+      headers: {
+        'content-type':
+          'application/json; charset=utf-8',
+
+        'cache-control':
+          'no-store'
+      }
+    }
+  );
+}
