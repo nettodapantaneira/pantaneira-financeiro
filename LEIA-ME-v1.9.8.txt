@@ -1,0 +1,39 @@
+PANTANEIRA FINANCEIRO v1.9.8 — RECUPERAÇÃO E CORREÇÃO
+
+CORREÇÕES PRINCIPAIS
+- Remove o ciclo recursivo que causava Error 1102 / Maximum call stack size exceeded.
+- Entry point novo e acíclico: src/worker-v198.js.
+- Restaura src/worker-v194.js para uma versão estável e não recursiva.
+- Mantém a Conciliação usando uma cópia versionada do módulo estável: public/v198.js.
+- Editor da Conciliação ampliado no desktop.
+- Venda no crédito e compra no cartão ficam separadas:
+  - entrou/recebi/vendi/venda = ENTRADA/VENDA.
+  - gasto/gastei/paguei/saiu + crédito Mercado Pago = COMPRA NA FATURA.
+  - gasto/saiu + Pix/débito = SAÍDA BANCÁRIA.
+- Compra no cartão não baixa o saldo bancário no momento da compra.
+- Datas retroativas pelo WhatsApp passam a ser aceitas para datas passadas; datas futuras continuam bloqueadas.
+- Mantém a normalização de valores e aliases da v1.9.3, incluindo Gravo.
+- Cache/PWA atualizado para v1.9.8.
+- Não adiciona migration e não altera o D1 durante o deploy.
+
+CORREÇÃO DO LANÇAMENTO #120
+Depois do deploy, pelo WhatsApp do número autorizado:
+financeiro corrigir cartao 120
+
+TESTES REAIS APÓS O DEPLOY
+1) entrou venda 35 cartao credito mercado pago
+   Esperado: entrada/venda, nunca compra no cartão.
+
+2) entrou venda 80 dinheiro
+   Esperado: entrada em dinheiro.
+
+3) 19/08 saiu 31 marmita mercado pago credito
+   Esperado: Compra no cartão registrada / Pessoal / Marmita / saldo bancário não alterado.
+
+4) 18/08 gasto 65 pneu da moto loja credito mercado pago empresa categoria Manutenção e reparos
+   Esperado: compra na fatura set/2026, empresa, Manutenção e reparos, sem baixar saldo bancário.
+
+IMPORTANTE
+- Não rodar migrations.
+- Não apagar o D1.
+- O arquivo src/worker-v196.js e src/worker-v197.js podem permanecer no repositório, mas não são usados pelo wrangler v1.9.8.

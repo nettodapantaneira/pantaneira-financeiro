@@ -1018,7 +1018,7 @@ async function executeWhatsAppCommand(db,input){
   const historicalEnd=(await getSetting(db,"historical_entry_end_date"))||"2026-08-10";
   const historicalStart=(await getSetting(db,"historical_entry_start_date"))||"2026-07-01";
   const historical=Boolean(date&&date>=historicalStart&&date<=historicalEnd);
-  if(date&&date>historicalEnd&&date!==localIsoDate(new Date()))throw new Error("para lançamentos após a implantação, use a data atual no WhatsApp ou edite pelo app.");
+  if(date&&date>localIsoDate(new Date()))throw new Error("não é permitido lançar uma data futura pelo WhatsApp.");
   if(!historical&&!account)throw new Error("informe a conta: mercado pago, nubank ou dinheiro.");
 
   const occurredAt=`${date||localIsoDate(new Date())}T16:00:00.000Z`;
