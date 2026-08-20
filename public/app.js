@@ -10,7 +10,7 @@ async function boot(){
   const status=await api('/api/auth/status',{},false).catch(()=>({configured:false,authenticated:false}));
   if(!status.configured){$('loginView').hidden=false;$('loginHint').textContent='Configure APP_PASSWORD e SESSION_SECRET no Cloudflare.';return;}
   if(!status.authenticated){$('loginView').hidden=false;return;}
-  $('app').hidden=false; bindEvents(); await loadAll();
+  $('app').hidden=false; bindEvents(); if($('transactionDate')&&!$('transactionDate').value)$('transactionDate').value=localYmd(); await loadAll();
 }
 
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();try{await api('/api/auth/login',{method:'POST',body:JSON.stringify({password:$('password').value})},false);location.reload();}catch(err){toast(err.message);}});
@@ -219,8 +219,9 @@ async function saveTransaction(e){
       if(msgs.length&&!confirm(`${msgs.join('\n')}\n\nA retirada é necessária? Clique OK para registrar mesmo assim.`))return;
     }
     const categoryId=direction==='transfer'?null:numOrNull($('category').value); if(direction!=='transfer'&&!categoryId)throw new Error('Escolha ou cadastre uma categoria.');
-    const payload={direction,amount_cents:amount,description:$('description').value.trim(),nature,category_id:categoryId,obligation_id:numOrNull($('obligation').value),debt_id:numOrNull($('debt').value),supplier_id:numOrNull($('supplier').value),source_account_id:direction==='income'?null:numOrNull($('sourceAccount').value),destination_account_id:direction==='expense'?null:numOrNull($('destinationAccount').value),payment_method:$('paymentMethod').value,notes:$('notes').value.trim()||null};
-    const result=await api('/api/transactions',{method:'POST',body:JSON.stringify(payload)}); toast(result.warnings?.length?`Salvo. ${result.warnings.join(' ')}`:'Lançamento salvo.'); $('transactionForm').reset(); setDirection('expense'); await loadAll(); showView('hoje');
+    const transactionDate=$('transactionDate')?.value||localYmd();
+    const payload={occurred_at:`${transactionDate}T16:00:00.000Z`,direction,amount_cents:amount,description:$('description').value.trim(),nature,category_id:categoryId,obligation_id:numOrNull($('obligation').value),debt_id:numOrNull($('debt').value),supplier_id:numOrNull($('supplier').value),source_account_id:direction==='income'?null:numOrNull($('sourceAccount').value),destination_account_id:direction==='expense'?null:numOrNull($('destinationAccount').value),payment_method:$('paymentMethod').value,notes:$('notes').value.trim()||null};
+    const result=await api('/api/transactions',{method:'POST',body:JSON.stringify(payload)}); toast(result.warnings?.length?`Salvo. ${result.warnings.join(' ')}`:'Lançamento salvo.'); $('transactionForm').reset(); if($('transactionDate'))$('transactionDate').value=localYmd(); setDirection('expense'); await loadAll(); showView('hoje');
   }catch(err){toast(err.message);}
 }
 
@@ -507,7 +508,7 @@ function paymentMethodLabel(v){return ({pix:'Pix',cash:'Dinheiro',debit:'Débito
 function showView(name){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${name}`));const navName=(name==='antes'||name==='pesquisa')?'lancar':name==='caixa'?'contas':name;document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===navName));window.scrollTo({top:0,behavior:'smooth'});}
 async function logout(){await api('/api/auth/logout',{method:'POST'});location.reload();}
 async function api(url,options={},auth=true){const r=await fetch(url,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});let data={};try{data=await r.json();}catch{}if(!r.ok){const e=new Error(data.error||`Erro ${r.status}`);e.status=r.status;throw e;}return data;}
-function parseMoney(v){const s=String(v??'').trim().replace(/\s/g,'');if(!s)throw new Error('Informe o valor.');let normalized=s;if(s.includes(','))normalized=s.replace(/\./g,'').replace(',','.');const n=Number(normalized);if(!Number.isFinite(n)||n<0)throw new Error('Valor inválido.');return Math.round(n*100);}
+function parseMoney(v){let s=String(v??'').trim().replace(/R\$/gi,'').replace(/\s/g,'');if(!s)throw new Error('Informe o valor.');s=s.replace(/^\+/,'');let normalized=s;if(s.includes(',')&&s.includes('.'))normalized=s.replace(/\./g,'').replace(',','.');else if(s.includes(','))normalized=s.replace(',','.');else if((s.match(/\./g)||[]).length>1)normalized=s.replace(/\./g,'');else if(/^\d{1,3}\.\d{3}$/.test(s))normalized=s.replace('.','');const n=Number(normalized);if(!Number.isFinite(n)||n<0)throw new Error('Valor inválido.');return Math.round(n*100);}
 function safeParseMoney(v){try{return parseMoney(v);}catch{return 0;}}
 function centsToInput(c){return (Number(c||0)/100).toFixed(2).replace('.',',');}
 function numOrNull(v){return v?Number(v):null;}

@@ -1,0 +1,36 @@
+PANTANEIRA FINANCEIRO v1.9.9
+============================
+
+Objetivo desta versão
+---------------------
+1. Transferência retroativa entre contas pelo app.
+2. Transferência retroativa pelo WhatsApp.
+3. Linha de Crédito recebida como financiamento/capital de giro, sem virar receita/faturamento.
+4. Campo de valor aceita formatos como 951,95 e R$ 951,95.
+5. Mantém intactas as migrations existentes: NÃO há migration nova nesta versão.
+
+Comandos validados para o caso atual
+------------------------------------
+17/08 transferência 951,95 Mercado Pago para Nubank
+17/08 +750,00 Linha de Crédito
+
+Comportamento da Linha de Crédito
+---------------------------------
+- entra no saldo bancário da conta Mercado Pago;
+- cria/vincula a dívida "Linha de Crédito Mercado Pago";
+- usa a categoria empresarial "Empréstimos e acordos";
+- não entra em faturamento de vendas;
+- não entra nos totais gerenciais de receita;
+- aparece como financiamento/capital de giro.
+
+Upload
+------
+Suba o conteúdo completo desta pasta no repositório, substituindo os arquivos existentes.
+O wrangler.jsonc já aponta para src/worker-v199.js.
+
+Após o deploy
+-------------
+1. Atualize a página com Ctrl+F5.
+2. Confirme que a versão exibida é v1.9.9.
+3. Teste primeiro a transferência retroativa de R$ 951,95.
+4. Depois registre a Linha de Crédito de R$ 750,00.

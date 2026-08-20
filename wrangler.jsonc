@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pantaneira-financeiro",
-  "main": "src/worker-v198.js",
+  "main": "src/worker-v199.js",
   "compatibility_date": "2026-08-14",
   "assets": {
     "directory": "./public",
@@ -18,7 +18,7 @@
   ],
   "vars": {
     "APP_NAME": "Pantaneira Financeiro",
-    "APP_VERSION": "1.9.8",
+    "APP_VERSION": "1.9.9",
     "WHATSAPP_ALLOWED_NUMBER": "5566999767860"
   }
 }

@@ -430,7 +430,7 @@ async function buildDashboard(db){
   const daily=calculateDailyProtection(futureTarget,now);
   const {start,end}=localDayUtcRange(now); const {monthStart,nextMonth}=localMonthUtcRange(now);
   const today=await db.prepare(`SELECT
-    COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' THEN t.amount_cents ELSE 0 END),0) income_cents,
+    COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' AND t.nature!='business_debt' THEN t.amount_cents ELSE 0 END),0) income_cents,
     COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' AND c.name IN ('Vendas da loja','Receita de vendas') THEN t.amount_cents ELSE 0 END),0) sales_cents,
     COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' AND c.name='Recebimento de vendas anteriores' THEN t.amount_cents ELSE 0 END),0) old_receipts_cents,
     COALESCE(SUM(CASE WHEN t.direction='expense' AND t.status!='void' THEN t.amount_cents ELSE 0 END),0) expense_cents,
@@ -438,7 +438,7 @@ async function buildDashboard(db){
     FROM transactions t LEFT JOIN categories c ON c.id=t.category_id
     WHERE t.occurred_at>=? AND t.occurred_at<?`).bind(start,end).first();
   const month=await db.prepare(`SELECT
-    COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' THEN t.amount_cents ELSE 0 END),0) income_cents,
+    COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' AND t.nature!='business_debt' THEN t.amount_cents ELSE 0 END),0) income_cents,
     COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' AND c.name IN ('Vendas da loja','Receita de vendas') THEN t.amount_cents ELSE 0 END),0) sales_cents,
     COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' AND c.name='Recebimento de vendas anteriores' THEN t.amount_cents ELSE 0 END),0) old_receipts_cents,
     COALESCE(SUM(CASE WHEN t.direction='expense' AND t.status!='void' THEN t.amount_cents ELSE 0 END),0) expense_cents,
@@ -504,7 +504,7 @@ async function buildDashboard(db){
 async function buildMonthSummary(db,periodKey){
   periodKey=validatePeriodKey(periodKey);
   const month=await db.prepare(`SELECT
-    COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' THEN t.amount_cents ELSE 0 END),0) income_cents,
+    COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' AND t.nature!='business_debt' THEN t.amount_cents ELSE 0 END),0) income_cents,
     COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' AND c.name IN ('Vendas da loja','Receita de vendas') THEN t.amount_cents ELSE 0 END),0) sales_cents,
     COALESCE(SUM(CASE WHEN t.direction='income' AND t.status!='void' AND c.name='Recebimento de vendas anteriores' THEN t.amount_cents ELSE 0 END),0) old_receipts_cents,
     COALESCE(SUM(CASE WHEN t.direction='expense' AND t.status!='void' THEN t.amount_cents ELSE 0 END),0) expense_cents,
@@ -915,7 +915,7 @@ async function processWhatsAppText(env,m){
 }
 
 async function executeWhatsAppCommand(db,input){
-  const raw=input.trim(),norm=normalizeText(raw);
+  const raw=String(input||"").trim().replace(/^financeiro\s+/i,"").trim(),norm=normalizeText(raw);
 
   if(norm==="ajuda"||norm==="help")return {reply:[
     "Pantaneira Financeiro pelo WhatsApp:",
@@ -956,14 +956,17 @@ async function executeWhatsAppCommand(db,input){
 
   const n=normalizeText(text);
 
+  if(isWhatsAppLineCreditCommand(text)){
+    return executeWhatsAppLineCreditCommand(db,text,date);
+  }
+
   if(/^(compra|comprei)\b/.test(n)){
     if(date)throw new Error("compra de estoque pelo WhatsApp usa a data atual; para histórico, registre pelo app.");
     return executeWhatsAppPurchaseCommand(db,text);
   }
 
-  if(/^(transfere|transferir|transferencia)\b/.test(n)){
-    if(date)throw new Error("transferência pelo WhatsApp usa a data atual; para histórico, registre pelo app.");
-    return executeWhatsAppTransferCommand(db,text);
+  if(/^(transfere|transferir|transferencia|transferência)\b/.test(n)){
+    return executeWhatsAppTransferCommand(db,text,date);
   }
 
   const direction=n.match(/^(entrou|recebi|vendi|venda)\b/)?"income":(n.match(/^(gasto|gastei|paguei|saida|saiu)\b/)?"expense":null);
@@ -1385,21 +1388,68 @@ function findWhatsAppAccountMentions(accounts,value){
   }
   return found.sort((a,b)=>a.index-b.index).map(x=>x.account);
 }
-async function executeWhatsAppTransferCommand(db,text){
+async function executeWhatsAppTransferCommand(db,text,date=null){
   const amountInfo=extractWhatsAppMoney(text);
   if(!amountInfo)throw new Error("não encontrei o valor da transferência.");
   const accounts=await listAccountsWithBalances(db);
   const mentions=findWhatsAppAccountMentions(accounts,text);
-  if(mentions.length<2)throw new Error("informe origem e destino. Ex.: transfere 27 mercado pago para nubank pix.");
+  if(mentions.length<2)throw new Error("informe origem e destino. Ex.: 17/08 transfere 951,95 mercado pago para nubank pix.");
   const source=mentions[0],destination=mentions[1];
   if(Number(source.id)===Number(destination.id))throw new Error("origem e destino precisam ser contas diferentes.");
   const n=normalizeText(text);
   const method=n.includes("pix")?"pix":"transfer";
-  const occurredAt=new Date().toISOString();
+  const occurredAt=date?`${date}T16:00:00.000Z`:new Date().toISOString();
   const r=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,description,notes,payment_method,recurrence_type,status,opening_history) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(occurredAt,periodKeyFromIso(occurredAt),"transfer",amountInfo.cents,source.id,destination.id,"transfer",null,`Transferência ${source.name} → ${destination.name}`,"Transferência entre contas lançada pelo WhatsApp",method,"eventual","posted",0).run();
-  return {reply:`Transferência registrada: ${formatCents(amountInfo.cents)}\nOrigem: ${source.name}\nDestino: ${destination.name}\nForma: ${method==="pix"?"Pix":"Transferência"}\nID #${r.meta.last_row_id}`};
+    .bind(occurredAt,periodKeyFromIso(occurredAt),"transfer",amountInfo.cents,source.id,destination.id,"transfer",null,`Transferência ${source.name} → ${destination.name}`,date?`Transferência entre contas retroativa lançada pelo WhatsApp em ${date}.`:"Transferência entre contas lançada pelo WhatsApp",method,"eventual","posted",0).run();
+  return {reply:`Transferência registrada: ${formatCents(amountInfo.cents)}\nData: ${date?formatIsoDateBR(date):"hoje"}\nOrigem: ${source.name}\nDestino: ${destination.name}\nForma: ${method==="pix"?"Pix":"Transferência"}\nID #${r.meta.last_row_id}`};
 }
+
+function isWhatsAppLineCreditCommand(text){
+  const n=normalizeText(text);
+  return /\blinha de credito\b/.test(n) && (/^(?:\+?\s*(?:r\$\s*)?\d)/i.test(String(text||'').trim()) || /^(entrou|recebi)\b/.test(n));
+}
+
+async function executeWhatsAppLineCreditCommand(db,text,date=null){
+  const amountInfo=extractWhatsAppMoney(String(text||'').replace(/^\s*\+/,'').replace(/^\s*(entrou|recebi)\s+/i,''));
+  if(!amountInfo)throw new Error("não encontrei o valor da Linha de Crédito.");
+
+  const accounts=await listAccountsWithBalances(db);
+  let account=findAccountAlias(accounts,normalizeText(text));
+  if(!account) account=accounts.find(a=>normalizeText(a.name)==="mercado pago");
+  if(!account)throw new Error("conta Mercado Pago não encontrada.");
+
+  let category=await db.prepare("SELECT id FROM categories WHERE nature='business_debt' AND active=1 AND name='Empréstimos e acordos' ORDER BY id LIMIT 1").first();
+  if(!category){
+    const cr=await db.prepare("INSERT INTO categories(name,nature,active) VALUES('Empréstimos e acordos','business_debt',1)").run();
+    category={id:cr.meta.last_row_id};
+  }
+
+  const occurredAt=date?`${date}T16:00:00.000Z`:new Date().toISOString();
+  const period=periodKeyFromIso(occurredAt);
+  const duplicate=await db.prepare(`SELECT id FROM transactions WHERE status!='void' AND direction='income' AND nature='business_debt' AND destination_account_id=? AND amount_cents=? AND substr(occurred_at,1,10)=? AND description='Linha de Crédito Mercado Pago' ORDER BY id DESC LIMIT 1`)
+    .bind(account.id,amountInfo.cents,String(occurredAt).slice(0,10)).first();
+  if(duplicate)return {reply:`Linha de Crédito já registrada: ${formatCents(amountInfo.cents)}\nData: ${formatIsoDateBR(String(occurredAt).slice(0,10))}\nConta: ${account.name}\nID #${duplicate.id}`};
+
+  let debt=await db.prepare("SELECT * FROM debts WHERE status='active' AND scope='business' AND name='Linha de Crédito Mercado Pago' ORDER BY id DESC LIMIT 1").first();
+  let debtId;
+  if(debt){
+    debtId=debt.id;
+    const current=Number(debt.current_balance_cents||0)+amountInfo.cents;
+    const original=Number(debt.original_balance_cents||0)+amountInfo.cents;
+    await db.prepare("UPDATE debts SET current_balance_cents=?,original_balance_cents=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(current,original,debtId).run();
+  }else{
+    const dr=await db.prepare(`INSERT INTO debts(name,creditor,scope,original_balance_cents,current_balance_cents,monthly_target_cents,installment_cents,due_day,flexible,priority,status,notes,debt_kind) VALUES('Linha de Crédito Mercado Pago','Mercado Pago','business',?,?,NULL,NULL,NULL,1,2,'active',?,'financing')`)
+      .bind(amountInfo.cents,amountInfo.cents,'Capital de giro recebido via Linha de Crédito. Não é receita de vendas.').run();
+    debtId=dr.meta.last_row_id;
+  }
+
+  const r=await db.prepare(`INSERT INTO transactions(occurred_at,period_key,direction,amount_cents,source_account_id,destination_account_id,nature,category_id,obligation_id,debt_id,description,notes,payment_method,recurrence_type,status,opening_history) VALUES(?,?,'income',?,NULL,?,'business_debt',?,NULL,?,'Linha de Crédito Mercado Pago','[FINANCING_INFLOW] Capital de giro recebido. Não contabilizar como receita/faturamento.','transfer','eventual','posted',0)`)
+    .bind(occurredAt,period,amountInfo.cents,account.id,category.id,debtId).run();
+
+  return {reply:`Linha de Crédito registrada: ${formatCents(amountInfo.cents)}\nData: ${formatIsoDateBR(String(occurredAt).slice(0,10))}\nEntrou em: ${account.name}\nClassificação: financiamento / capital de giro\nNão entra como receita de vendas.\nDívida vinculada: Linha de Crédito Mercado Pago\nID #${r.meta.last_row_id}`};
+}
+
+function formatIsoDateBR(value){const [y,m,d]=String(value||'').slice(0,10).split('-');return y&&m&&d?`${d}/${m}/${y}`:String(value||'');}
 function localIsoDate(date){const p=localDateParts(date);return `${p.year}-${String(p.month).padStart(2,"0")}-${String(p.day).padStart(2,"0")}`;}
 async function verifyMetaSignature(raw,header,secret){if(!header.startsWith("sha256="))return false;const expected=await hmacHex(raw,secret);return safeEqual(header.slice(7),expected);}
 async function hmacHex(value,secret){const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);const out=new Uint8Array(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(value)));return [...out].map(b=>b.toString(16).padStart(2,"0")).join("");}

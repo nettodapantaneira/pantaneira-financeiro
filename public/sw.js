@@ -1,4 +1,4 @@
-const CACHE='pantaneira-financeiro-v1.9.8';
+const CACHE='pantaneira-financeiro-v1.9.9';
 const ASSETS=[
   '/',
   '/index.html',
@@ -13,6 +13,7 @@ const ASSETS=[
   '/v192.js',
   '/v193.js',
   '/v198.js',
+  '/v199.js',
   '/premium.css',
   '/mobile-final.css',
   '/manifest.webmanifest'

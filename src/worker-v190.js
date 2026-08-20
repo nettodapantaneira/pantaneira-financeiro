@@ -334,7 +334,7 @@ function filterBills(rows, from, to, f) {
 
 function summarize(transactions, cardItems, accountId) {
   const s = {
-    income_cents:0,sales_cents:0,other_income_cents:0,
+    income_cents:0,sales_cents:0,other_income_cents:0,financing_in_cents:0,
     expense_cents:0,business_operating_cents:0,inventory_cents:0,
     debt_cents:0,personal_cents:0,fees_cents:0,bill_payments_cents:0,
     transfer_in_cents:0,transfer_out_cents:0,transfer_total_cents:0,
@@ -349,9 +349,13 @@ function summarize(transactions, cardItems, accountId) {
     s.movement_count++;
 
     if (t.direction === 'income') {
-      s.income_cents += v;
-      if (SALES_CATEGORIES.has(norm(t.category_name))) s.sales_cents += v;
-      else s.other_income_cents += v;
+      if (t.nature === 'business_debt' || String(t.notes || '').includes('[FINANCING_INFLOW]')) {
+        s.financing_in_cents += v;
+      } else {
+        s.income_cents += v;
+        if (SALES_CATEGORIES.has(norm(t.category_name))) s.sales_cents += v;
+        else s.other_income_cents += v;
+      }
     } else if (t.direction === 'expense') {
       s.expense_cents += v;
       if (t.nature === 'business_operating') s.business_operating_cents += v;
@@ -378,7 +382,7 @@ function summarize(transactions, cardItems, accountId) {
     else s.card_business_cents += v;
   }
 
-  s.net_cash_cents = s.income_cents - s.expense_cents + s.transfer_in_cents - s.transfer_out_cents;
+  s.net_cash_cents = s.income_cents + s.financing_in_cents - s.expense_cents + s.transfer_in_cents - s.transfer_out_cents;
   s.operational_cash_result_cents = s.income_cents - s.business_operating_cents - s.inventory_cents;
 
   const cashBusinessWithoutBillSettlement = Math.max(

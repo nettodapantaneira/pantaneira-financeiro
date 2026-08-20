@@ -215,13 +215,14 @@
     return `
       <div class="pr-kpis">
         ${kpi('Faturamento de vendas',s.sales_cents,comparePct(s.sales_cents,p.sales_cents),'Vendas registradas no período','primary')}
-        ${kpi('Entradas totais',s.income_cents,comparePct(s.income_cents,p.income_cents),'Inclui vendas, rendimentos e outras entradas')}
+        ${kpi('Entradas totais',s.income_cents,comparePct(s.income_cents,p.income_cents),'Vendas, rendimentos e outras entradas; não inclui capital de giro')}
         ${kpi('Saídas de caixa',s.expense_cents,comparePct(s.expense_cents,p.expense_cents,true),'Dinheiro que efetivamente saiu das contas')}
-        ${kpi('Resultado de caixa',s.net_cash_cents,compareMoney(s.net_cash_cents,p.net_cash_cents),'Entradas − saídas ± transferências da conta filtrada',s.net_cash_cents<0?'':'primary')}
+        ${kpi('Resultado de caixa',s.net_cash_cents,compareMoney(s.net_cash_cents,p.net_cash_cents),'Entradas + financiamentos − saídas ± transferências da conta filtrada',s.net_cash_cents<0?'':'primary')}
       </div>
 
       <div class="pr-secondary pr-section-gap">
-        ${mini('Resultado operacional',s.operational_cash_result_cents,'Entradas − operação − compras/estoque')}
+        ${mini('Resultado operacional',s.operational_cash_result_cents,'Entradas sem financiamento − operação − compras/estoque')}
+        ${mini('Financiamentos recebidos',s.financing_in_cents,'Capital de giro / crédito recebido; não é receita')}
         ${mini('Retiradas pessoais',s.personal_cents,'Pagas pelo caixa no período')}
         ${mini('Compras / estoque',s.inventory_cents,'Pagamentos à vista e saídas classificadas')}
         ${mini('Taxas financeiras',s.fees_cents,'Maquininhas, tarifas e juros')}
@@ -440,7 +441,7 @@
       report.debts.forEach(d=>rows.push(['Acordo/financiamento',d.name,d.scope,d.current_balance_cents==null?'Saldo a informar':dec(d.current_balance_cents),dec(d.paid_in_period_cents)]));
     }else{
       const s=report.summary;
-      rows=[['Indicador','Valor'],['Faturamento de vendas',dec(s.sales_cents)],['Entradas totais',dec(s.income_cents)],['Saídas de caixa',dec(s.expense_cents)],['Resultado de caixa',dec(s.net_cash_cents)],['Operação',dec(s.business_operating_cents)],['Compras/estoque',dec(s.inventory_cents)],['Retiradas pessoais',dec(s.personal_cents)],['Acordos/financiamentos',dec(s.debt_cents)],['Taxas financeiras',dec(s.fees_cents)],['Compras cartão empresa',dec(s.card_business_cents)],['Compras cartão pessoal',dec(s.card_personal_cents)]];
+      rows=[['Indicador','Valor'],['Faturamento de vendas',dec(s.sales_cents)],['Entradas totais (sem financiamentos)',dec(s.income_cents)],['Financiamentos recebidos',dec(s.financing_in_cents)],['Saídas de caixa',dec(s.expense_cents)],['Resultado de caixa',dec(s.net_cash_cents)],['Operação',dec(s.business_operating_cents)],['Compras/estoque',dec(s.inventory_cents)],['Retiradas pessoais',dec(s.personal_cents)],['Acordos/financiamentos pagos',dec(s.debt_cents)],['Taxas financeiras',dec(s.fees_cents)],['Compras cartão empresa',dec(s.card_business_cents)],['Compras cartão pessoal',dec(s.card_personal_cents)]];
     }
     downloadCsv(name,rows);
   }
