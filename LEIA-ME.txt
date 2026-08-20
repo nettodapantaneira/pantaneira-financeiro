@@ -1,31 +1,21 @@
-PANTANEIRA FINANCEIRO — HOTFIX v1.9.7
+PANTANEIRA FINANCEIRO — ROLLBACK ESTÁVEL v1.9.4
 
 OBJETIVO
-- Remover a cadeia worker-v197 -> worker-v196 que causou Error 1102 / resource limits.
-- Separar definitivamente VENDA NO CRÉDITO de COMPRA NO CARTÃO.
-- Preservar a base estável worker-v194 e o D1 atual.
+Restaurar imediatamente o Financeiro após Error 1102 / Worker exceeded resource limits.
 
-ARQUIVOS PARA SUBIR
-- src/worker-v197.js
-- wrangler.jsonc
+O QUE ESTE PACOTE FAZ
+- Faz o entrypoint voltar para src/worker-v194.js.
+- Não altera D1.
+- Não altera migrations.
+- Não apaga lançamentos.
+- Não altera worker-v194.js.
+- Não altera public/v194.js.
 
-NÃO ALTERAR
-- D1
-- migrations
-- public/v194.js
-- worker-v194.js
+COMO SUBIR
+1. Descompacte.
+2. No GitHub, substitua SOMENTE o arquivo wrangler.jsonc da raiz pelo arquivo deste pacote.
+3. Commit directly to main.
+4. Aguarde o deploy.
+5. Abra o Financeiro com Ctrl+F5.
 
-TESTES APÓS O DEPLOY
-1) O site deve abrir sem Error 1102.
-2) WhatsApp: entrou venda 35 cartao credito mercado pago
-   Esperado: entrada/venda. Nunca "Compra no cartão".
-3) WhatsApp: entrou venda 80 dinheiro
-   Esperado: entrada em dinheiro.
-4) WhatsApp: 19/08 saiu 31 marmita mercado pago credito
-   Esperado: compra na fatura do Cartão Mercado Pago, sem baixar saldo bancário.
-
-REGRAS
-- entrou/recebi/vendi/venda + crédito = VENDA/ENTRADA.
-- gasto/gastei/paguei/saiu/compra + crédito Mercado Pago = COMPRA NO CARTÃO.
-- gasto/saiu + Pix/débito = SAÍDA BANCÁRIA.
-- pagamento de fatura não vira nova compra.
+Depois que o sistema estiver de volta, não mexa em worker-v196/v197 até a correção ser reconstruída e testada fora da produção.
